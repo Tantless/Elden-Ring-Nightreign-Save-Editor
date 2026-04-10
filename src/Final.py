@@ -1359,12 +1359,11 @@ class SaveEditorGUI:
             self.update_vessel_tab_comboboxes()
 
             # Display character buttons
-            self.display_character_buttons()
+            self.update_char_table()
 
             # Auto-select the last used character if valid
             if 0 <= last_char_index < len(self.char_table):
-                name, path = self.char_table[last_char_index]
-                self.on_character_click(last_char_index, path, name)
+                self.on_character_click(last_char_index)
 
         except Exception as e:
             traceback.print_exc()
@@ -4243,14 +4242,17 @@ class SaveEditorGUI:
 
         # Save the opened file path to config
         self.config.last_file = file_path
-        # Reset character index since we're opening a new file
-        self.last_char_index = 0
-        self.config.save()
 
         # Display character buttons
-        self.display_character_buttons()
+        self.update_char_table()
 
-    def display_character_buttons(self):
+        # Select first character by default
+        if len(self.char_table) > 0:
+            self.on_character_click(0)
+        else:
+            messagebox.showerror("Error", "No characters were found in the save file.")
+
+    def update_char_table(self):
         # Clear existing buttons
         for widget in self.char_button_frame.winfo_children():
             widget.destroy()
@@ -4268,9 +4270,7 @@ class SaveEditorGUI:
                 self.char_button_frame,
                 text=f"{idx+1}. {name}",
                 style="Char.TButton",
-                command=lambda b_idx=idx, p=path, n=name: self.on_character_click(
-                    b_idx, p, n
-                ),
+                command=lambda b_idx=idx: self.on_character_click(b_idx),
                 width=20,
             )
             btn.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
@@ -4280,10 +4280,12 @@ class SaveEditorGUI:
         for col in range(columns):
             self.char_button_frame.grid_columnconfigure(col, weight=1)
 
-    def on_character_click(self, idx, path, name):
+    def on_character_click(self, idx):
         # Reset all buttons to normal style
         for b in self.char_buttons:
             b.configure(style="Char.TButton")
+
+        _, path = self.char_table[idx]
 
         # Highlight clicked button
         self.char_buttons[idx].configure(style="Highlighted.TButton")
@@ -5757,8 +5759,8 @@ class SaveEditorGUI:
             new_name = InventoryHandler.get_player_name_from_data(globals.data)
             msg_info("Success", f"Successfully replace {old_name} <- {new_name}")
             popup.destroy()
-            self.display_character_buttons()
-            self.on_character_click(index, path, new_name)
+            self.update_char_table()
+            self.on_character_click(index)
 
         popup = tk.Toplevel(self.root)
         self.color_theme.apply(popup)
