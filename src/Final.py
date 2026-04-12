@@ -312,10 +312,12 @@ def save_file():
 
 def name_to_path(unpack_dir: Path | str):
     unpack_dir = Path(unpack_dir)
+    character_slots = packer.get_character_slots(unpack_dir)
     name_list: list[tuple[str, str]] = []
-    prefix = "USERDATA_"
     for i in range(10):
-        userdata = unpack_dir / f"{prefix}{i}"
+        if not character_slots[i]:
+            continue
+        userdata = unpack_dir / f"USERDATA_{i}"
         if not userdata.exists():
             logger.warning(f"{userdata} not found, skipping")
             continue
