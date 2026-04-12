@@ -279,6 +279,31 @@ RELIC_COLOR_HEX = {
 }
 
 
+def ask_and_resign_steam_id(output_file: str):
+    mode = packer.detect_repacker(UNPACK_DIR).mode
+    if mode != "PC":
+        return False
+    dir_name = Path(output_file).parent.name
+    if not dir_name.isdigit() or len(dir_name) != 17:
+        return False
+    target_steam_id = int(dir_name)
+    current_steam_id = int.from_bytes(packer.read_steam_id(UNPACK_DIR), "little")
+    if target_steam_id == current_steam_id:
+        return False
+    answer = messagebox.askyesnocancel(
+        message=_(
+            "You are saving to a path belonging to Steam ID {target_id},\n"
+            "which does not match the current Steam ID {current_id}.\n\n"
+            "Would you like to re-sign the save file to Steam ID {target_id}?"
+        ).format(target_id=target_steam_id, current_id=current_steam_id)
+    )
+    if answer == True:
+        target_steam_id_bytes = target_steam_id.to_bytes(8, byteorder="little")
+        for i in range(11):
+            packer.patch_steam_id(f"{UNPACK_DIR}/USERDATA_{i}", target_steam_id_bytes)
+    return answer
+
+
 def save_file():
     save_current_data()
 
@@ -298,6 +323,10 @@ def save_file():
         filetypes=filetypes,
     )
     if not output_file:
+        return False
+
+    answer = ask_and_resign_steam_id(output_file)
+    if answer is None:
         return False
 
     try:
