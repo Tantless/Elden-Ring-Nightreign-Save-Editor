@@ -291,6 +291,7 @@ def ask_and_resign_steam_id(output_file: str):
     if target_steam_id == current_steam_id:
         return False
     answer = messagebox.askyesnocancel(
+        title=_("Steam ID re-sign"),
         message=_(
             "You are saving to a path belonging to Steam ID {target_id},\n"
             "which does not match the current Steam ID {current_id}.\n\n"
@@ -4395,16 +4396,20 @@ class SaveEditorGUI:
             return
 
         confrim = messagebox.askyesno(
-            "Confirm",
-            "Modifying Murks would get you banned. Are you sure you want to proceed?",
+            _("Confirm"),
+            _(
+                "Modifying Murks would get you banned. Are you sure you want to proceed?"
+            ),
+            icon="warning",
         )
         if not confrim:
             return
 
-        new_value = simpledialog.askinteger(
-            "Modify Murks",
-            f"Current Murks: {self.inventory_handler.murks}\n\nEnter new value (decimal):",
-            initialvalue=self.inventory_handler.murks,
+        new_value = ui.ask_for_int(
+            self.root,
+            title=_("Modify Murks"),
+            prompt=_("Enter new value:"),
+            initial=self.inventory_handler.murks,
         )
         if new_value is not None:
             self.inventory_handler.murks = new_value
@@ -4417,10 +4422,19 @@ class SaveEditorGUI:
             messagebox.showwarning("Warning", "No character loaded")
             return
 
-        new_value = simpledialog.askinteger(
-            "Modify Sigs",
-            f"Current Sigs: {self.inventory_handler.sigs}\n\nEnter new value (decimal):",
-            initialvalue=self.inventory_handler.sigs,
+        confrim = messagebox.askyesno(
+            _("Confirm"),
+            _("Modifying Sigs would get you banned. Are you sure you want to proceed?"),
+            icon="warning",
+        )
+        if not confrim:
+            return
+
+        new_value = ui.ask_for_int(
+            self.root,
+            title=_("Modify Sigs"),
+            prompt=_("Enter new value:"),
+            initial=self.inventory_handler.sigs,
         )
         if new_value is not None:
             self.inventory_handler.sigs = new_value
@@ -5104,11 +5118,16 @@ class SaveEditorGUI:
             msg_warning("Warning", "No relic selected")
             return
 
-        target_index_str = ui.ask_for_move_index(self.root)
-        if not target_index_str:
+        target_index = ui.ask_for_int(
+            self.root,
+            title=_("Move Index"),
+            prompt=_("Move to After (#):"),
+            initial=None,
+            note=_("Note: This will also affect the 'Acquisition Time' sorting in-game."),
+        )
+        if not target_index:
             return
 
-        target_index = int(target_index_str)
         target_index = min(max(0, target_index), len(self.all_relics))
 
         tags = [self.tree.item(item, "tags") for item in selection]
