@@ -48,14 +48,14 @@ jobs:
             spec: src/build_mac.spec
             artifact: Nightreign_Relic_Editor_MAC-Silicon
             artifact-path: dist/*.app
-            uv-python: 3.14
+            uv-python: 3.12
 
           - name: macOS Intel
             os: macos-15-intel
             spec: src/build_mac.spec
             artifact: Nightreign_Relic_Editor_MAC-Intel
             artifact-path: dist/*.app
-            uv-python: 3.14
+            uv-python: 3.12
 
     runs-on: ${{ matrix.os }}
     steps:
