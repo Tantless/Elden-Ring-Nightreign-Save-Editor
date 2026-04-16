@@ -1782,7 +1782,7 @@ class SaveEditorGUI:
             tree.tag_configure("deep_slot", foreground="#9999BB")
 
             # Bind right-click for context menu
-            tree.bind("<Button-3>", lambda e, v=i: self.show_vessel_context_menu(e, v))
+            tree.bind(ui.RIGHT_COMMAND, lambda e, v=i: self.show_vessel_context_menu(e, v))
             # Bind double-click to open replace dialog
             tree.bind(
                 "<Double-1>", lambda e, v=i: self.on_vessel_relic_double_click(e, v)
@@ -4168,7 +4168,7 @@ class SaveEditorGUI:
         self.tree.configure(selectmode="extended")
 
         # Context menu
-        self.tree.bind("<Button-3>", self.show_context_menu)
+        self.tree.bind(ui.RIGHT_COMMAND, self.show_context_menu)
 
         # Action buttons
         action_frame = ttk.Frame(self.inventory_tab)
