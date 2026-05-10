@@ -389,12 +389,12 @@ def export_relics_to_excel(filepath="relics.xlsx"):
         "Effect 2 (Name)",
         "Effect 3 (ID)",
         "Effect 3 (Name)",
-        "Sec Effect 1 (ID)",
-        "Sec Effect 1 (Name)",
-        "Sec Effect 2 (ID)",
-        "Sec Effect 2 (Name)",
-        "Sec Effect 3 (ID)",
-        "Sec Effect 3 (Name)",
+        "Curse 1 (ID)",
+        "Curse 1 (Name)",
+        "Curse 2 (ID)",
+        "Curse 2 (Name)",
+        "Curse 3 (ID)",
+        "Curse 3 (Name)",
     ]
 
     ws.append(headers)
@@ -408,17 +408,15 @@ def export_relics_to_excel(filepath="relics.xlsx"):
 
     # Fill sheet
     for relic_ga in inventory.relic_gas:
-        item_id = inventory.relics[relic_ga].state.item_id
-        # Skip invalid relics
-        if item_id in (0, -1, 0xFFFFFFFF):
+        state = inventory.relics[relic_ga].state
+        real_id = state.real_item_id
+        if real_id == 0x00FFFFFF:
             continue
 
-        real_id = item_id - 2147483648
-        # Get relic name
         item = game_data.relics.get(real_id)
         relic_name = item.name if item else f"UnknownRelic({real_id})"
         relic_color = item.color if item else "Unknown"
-        effects = inventory.relics[relic_ga].state.effects_and_curses
+        effects = state.effects_and_curses
         row = [
             real_id,
             relic_name,
@@ -436,7 +434,6 @@ def export_relics_to_excel(filepath="relics.xlsx"):
             effects[5],
             get_eff_name(effects[5]),
         ]
-
         ws.append(row)
 
     # Auto-size columns
@@ -455,65 +452,137 @@ def export_relics_to_excel(filepath="relics.xlsx"):
         return False, f"Failed to save Excel: {str(e)}"
 
 
-def import_relics_from_excel(filepath):
+def _norm_eff(val):
+    """Normalize effect values: treat 0, -1, None, 0xFFFFFFFF all as empty (0xFFFFFFFF)."""
+    if val is None:
+        return 0xFFFFFFFF
+    v = int(val)
+    if v in (0, -1, 0xFFFFFFFF):
+        return 0xFFFFFFFF
+    return v
+
+
+def import_relics_from_excel(filepath, update_progress=None):
     """
-    Imports relics from an Excel file and modifies current relics to match.
-    If imported list is longer than current relic list, extras are ignored.
+    Import relics from an Excel file by comparing signatures against current inventory.
+
+    For each unique relic signature in the Excel file:
+      - Unique relics are always skipped.
+      - If inventory already has enough copies, skip the rest.
+      - If inventory has fewer copies, add the difference.
     """
-    # Lazy import openpyxl only when needed
     from openpyxl import load_workbook
 
-    inventory = InventoryHandler()  # Singleton
-
-    if not inventory.relic_gas:
-        return False, "No relics loaded in current save"
+    inventory = InventoryHandler()
 
     try:
-        inventory = InventoryHandler()  # Singleton
         wb = load_workbook(filepath)
         ws = wb.active
-
-        # Skip header row
         rows = list(ws.iter_rows(min_row=2, values_only=True))
-
-        modifications_made = 0
-
-        # Iterate through current relics and imported data simultaneously
-        for idx, ga in enumerate(inventory.relic_gas):
-            if idx >= len(rows):
-                break
-
-            row = rows[idx]
-            item_id = inventory.relics[ga].state.item_id
-            new_item_id = row[0] if row[0] is not None else 100
-            new_e1 = row[3] if row[3] is not None else 0xFFFFFFFF
-            new_e2 = row[5] if row[5] is not None else 0xFFFFFFFF
-            new_e3 = row[7] if row[7] is not None else 0xFFFFFFFF
-            new_se1 = row[9] if row[9] is not None else 0xFFFFFFFF
-            new_se2 = row[11] if row[11] is not None else 0xFFFFFFFF
-            new_se3 = row[13] if row[13] is not None else 0xFFFFFFFF
-
-            real_id = item_id - 2147483648
-            new_item_id = real_id if row[0] == 0 else new_item_id
-            # Convert item ID back to internal format
-            new_item_id_internal = new_item_id + 2147483648
-
-            # Modify the relic
-
-            # Update effects
-            new_effects = [new_e1, new_e2, new_e3, new_se1, new_se2, new_se3]
-            try:
-                if inventory.modify_relic(ga, new_item_id, *new_effects):
-                    modifications_made += 1
-                    save_current_data()
-            except Exception:
-                pass
-
-        save_current_data()
-        return True, f"Successfully imported and modified {modifications_made} relic(s)"
-
     except Exception as e:
-        return False, f"Failed to import Excel: {str(e)}"
+        raise ValueError(f"Failed to read Excel: {e}")
+
+    if update_progress:
+        update_progress(0, "Reading Excel file...")
+
+    # Build Excel signatures with counts
+    excel_sigs: dict[tuple, int] = {}
+    skipped_unique_count = 0
+
+    for row in rows:
+        if not row or row[0] is None:
+            continue
+        real_id = int(row[0])
+
+        if real_id in UNIQUENESS_IDS:
+            skipped_unique_count += 1
+            continue
+
+        sig = (
+            real_id,
+            _norm_eff(row[3]),
+            _norm_eff(row[5]),
+            _norm_eff(row[7]),
+            _norm_eff(row[9]),
+            _norm_eff(row[11]),
+            _norm_eff(row[13]),
+        )
+        excel_sigs[sig] = excel_sigs.get(sig, 0) + 1
+
+    if not excel_sigs and skipped_unique_count == 0:
+        raise ValueError("No valid relic rows found in Excel file.")
+
+    if update_progress:
+        update_progress(25, "Comparing with inventory...")
+
+    # Build inventory signatures with counts
+    inv_sigs: dict[tuple, int] = {}
+
+    for ga in inventory.relic_gas:
+        state = inventory.relics[ga].state
+        effects = state.effects_and_curses
+        sig = (
+            state.real_item_id,
+            _norm_eff(effects[0]),
+            _norm_eff(effects[1]),
+            _norm_eff(effects[2]),
+            _norm_eff(effects[3]),
+            _norm_eff(effects[4]),
+            _norm_eff(effects[5]),
+        )
+        inv_sigs[sig] = inv_sigs.get(sig, 0) + 1
+
+    # Calculate totals
+    total_to_add = 0
+    for sig, excel_count in excel_sigs.items():
+        inv_count = inv_sigs.get(sig, 0)
+        if excel_count > inv_count:
+            total_to_add += excel_count - inv_count
+
+    if total_to_add == 0:
+        already_had = sum(min(excel_sigs[s], inv_sigs[s]) for s in set(excel_sigs) & set(inv_sigs))
+        return f"No new relics to add.\n\nSkipped {already_had} existing, {skipped_unique_count} unique."
+
+    # Add missing relics
+    added_count = 0
+    failed_count = 0
+
+    for sig, excel_count in excel_sigs.items():
+        inv_count = inv_sigs.get(sig, 0)
+        if excel_count <= inv_count:
+            continue
+
+        diff = excel_count - inv_count
+        real_id = sig[0]
+        effects = list(sig[1:])
+
+        for _ in range(diff):
+            try:
+                _, new_ga = inventory.add_relic_to_inventory()
+                inventory.modify_relic(new_ga, real_id, *effects)
+                added_count += 1
+                if update_progress:
+                    p = 25 + (added_count / total_to_add) * 75
+                    update_progress(p, f"Importing... ({added_count}/{total_to_add})")
+            except Exception:
+                failed_count += 1
+
+    save_current_data()
+
+    # Build summary
+    already_had = sum(min(excel_sigs[s], inv_sigs[s]) for s in set(excel_sigs) & set(inv_sigs))
+
+    lines = [f"Import complete."]
+    if added_count > 0:
+        lines.append(f"  Added: {added_count}")
+    if already_had > 0:
+        lines.append(f"  Skipped (already exist): {already_had}")
+    if failed_count > 0:
+        lines.append(f"  Failed: {failed_count}")
+    if skipped_unique_count > 0:
+        lines.append(f"  Skipped (unique): {skipped_unique_count}")
+
+    return "\n".join(lines)
 
 
 def delete_all_illegal_relics():
@@ -3888,17 +3957,13 @@ class SaveEditorGUI:
         lang_mgr.register(btn_refresh, N_("🔄 Refresh Inventory"))
         btn_refresh.pack(side="left", padx=5)
 
-        # btn_export = ttk.Button(
-        #     controls_frame, text="📤 Export to Excel", command=self.export_relics
-        # )
-        # lang_mgr.register(btn_export, N_("📤 Export to Excel"))
-        # btn_export.pack(side="left", padx=5)
+        btn_export = ttk.Button(controls_frame, text="📤 Export to Excel", command=self.export_relics)
+        lang_mgr.register(btn_export, N_("📤 Export to Excel"))
+        btn_export.pack(side="left", padx=5)
 
-        # btn_import = ttk.Button(
-        #     controls_frame, text="📥 Import from Excel", command=self.import_relics
-        # )
-        # lang_mgr.register(btn_import, N_("📥 Import from Excel"))
-        # btn_import.pack(side="left", padx=5)
+        btn_import = ttk.Button(controls_frame, text="📥 Import from Excel", command=self.import_relics)
+        lang_mgr.register(btn_import, N_("📥 Import from Excel"))
+        btn_import.pack(side="left", padx=5)
 
         btn_delete_all = ttk.Button(
             controls_frame,
@@ -5751,26 +5816,38 @@ class SaveEditorGUI:
         if not filepath:
             return
 
-        # Confirm import
         result = messagebox.askyesno(
             "Confirm Import",
-            "This will modify your current relics to match the imported file.\n\n"
-            "• Relic IDs and effects will be replaced\n"
-            "• Extra relics in the file will be ignored\n"
-            "• Make sure you have a backup!\n\n"
+            "This will add relics from the Excel file that are missing in your inventory.\n\n"
+            "• Existing relics (same Item ID + same effects) are skipped\n"
+            "• Unique relics are always skipped\n"
+            "• Only new or additional copies will be added\n\n"
             "Continue?",
         )
 
         if not result:
             return
 
-        success, message = import_relics_from_excel(filepath)
+        result_holder = {}
 
-        if success:
-            messagebox.showinfo("Success", message)
+        def do_import(filepath, update_progress=None):
+            msg = import_relics_from_excel(filepath, update_progress)
+            result_holder["msg"] = msg
+
+        def on_done():
             self.reload_inventory()
-        else:
-            messagebox.showerror("Error", message)
+            msg = result_holder.get("msg", "")
+            if msg:
+                messagebox.showinfo("Import Summary", msg)
+
+        self.run_task_async(
+            do_import,
+            args=(filepath,),
+            title="Importing Relics",
+            label_text="Reading Excel file...",
+            callback=on_done,
+            progress_bar=True,
+        )
 
     def delete_all_illegal(self):
         """Delete all relics with illegal effects"""

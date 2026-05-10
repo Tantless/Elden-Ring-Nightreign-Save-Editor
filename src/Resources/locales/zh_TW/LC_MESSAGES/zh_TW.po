@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-14 16:06+0800\n"
+"POT-Creation-Date: 2026-05-10 23:13+0800\n"
 "PO-Revision-Date: 2026-02-07 19:25+0800\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -32,257 +32,265 @@ msgstr ""
 "\n"
 "您是否要將存檔重簽為 Steam ID {target_id}？"
 
-#: src\Final.py:1231
+#: src\Final.py:1300
 msgid "File Management"
 msgstr "檔案管理"
 
-#: src\Final.py:1233
+#: src\Final.py:1302
 msgid "Relics"
 msgstr "遺物"
 
-#: src\Final.py:1235
+#: src\Final.py:1304
 msgid "Vessels"
 msgstr "聖杯"
 
-#: src\Final.py:1421
+#: src\Final.py:1490
 msgid "Save File Management"
 msgstr "存檔管理"
 
-#: src\Final.py:1429
+#: src\Final.py:1498
 msgid "Load your Elden Ring Nightreign save file to begin editing"
 msgstr "載入您的《艾爾登法環:暗夜君臨》存檔以開始編輯"
 
-#: src\Final.py:1435
+#: src\Final.py:1504
 msgid "📁 Open Save File"
 msgstr "📁 開啟存檔"
 
-#: src\Final.py:1443
+#: src\Final.py:1512
 msgid "💾 Save Modified File"
 msgstr "💾 儲存已修改的檔案"
 
-#: src\Final.py:1451
+#: src\Final.py:1520
 msgid "📥 Replace Character"
 msgstr "📥 取代角色"
 
-#: src\Final.py:1458
+#: src\Final.py:1527
 msgid "Settings"
 msgstr "設定"
 
-#: src\Final.py:1468
+#: src\Final.py:1537
 msgid "Language:"
 msgstr "語言："
 
-#: src\Final.py:1487
+#: src\Final.py:1556
 msgid "Theme:"
 msgstr "主題："
 
-#: src\Final.py:1510
+#: src\Final.py:1579
 msgid ""
 "Reduce Message Pop: This will remove certain potentially unnecessary success "
 "messages."
 msgstr "減少訊息彈出：此設定將移除某些可能不必要的成功訊息。"
 
-#: src\Final.py:1518
+#: src\Final.py:1587
 msgid "Character Statistics"
 msgstr "角色統計數據"
 
-#: src\Final.py:1528
+#: src\Final.py:1597
 msgid "Murks:"
 msgstr "暗痕:"
 
-#: src\Final.py:1537 src\Final.py:1556
+#: src\Final.py:1606 src\Final.py:1625
 msgid "Edit"
 msgstr "編輯"
 
-#: src\Final.py:1547
+#: src\Final.py:1616
 msgid "Sigs:"
 msgstr "為王之證:"
 
-#: src\Final.py:1562
+#: src\Final.py:1631
 msgid "🔄 Refresh Stats"
 msgstr "🔄 重新整理統計數據"
 
-#: src\Final.py:1569
+#: src\Final.py:1638
 msgid "Select Character"
 msgstr "選擇角色"
 
-#: src\Final.py:1577
+#: src\Final.py:1646
 msgid "Choose a character to load:"
 msgstr "選擇要載入的角色："
 
-#: src\Final.py:1605
+#: src\Final.py:1674
 msgid "🔄 Refresh"
 msgstr "🔄 重新整理"
 
-#: src\Final.py:1610
+#: src\Final.py:1679
 msgid "💾 Save Loadout"
 msgstr "💾 儲存配裝"
 
-#: src\Final.py:1615
+#: src\Final.py:1684
 msgid "📂 Load Loadout"
 msgstr "📂 載入配裝"
 
-#: src\Final.py:1620
+#: src\Final.py:1689
 msgid "Character:"
 msgstr "角色："
 
-#: src\Final.py:1732
+#: src\Final.py:1801
 msgid "➕ Add to Preset"
 msgstr "➕ 新增為預置配裝"
 
-#: src\Final.py:1801
+#: src\Final.py:1870
 msgid "📁 Saved Presets"
 msgstr "📁 已儲存的預置配裝"
 
-#: src\Final.py:1866
+#: src\Final.py:1935
 #, python-brace-format
 msgid "✅ Unlocked ({relic_count}/6 relics)"
 msgstr "✅ 已解鎖 ({relic_count}/6 遺物)"
 
-#: src\Final.py:1877
+#: src\Final.py:1946
 #, python-brace-format
 msgid "⚠️ Locked (Unlock Flag: {unlock_flag})"
 msgstr "⚠️ 未解鎖 (Unlock Flag: {unlock_flag})"
 
-#: src\Final.py:2256
+#: src\Final.py:2325
 msgid "⚙️ Equip Preset"
 msgstr "⚙️ 裝備"
 
-#: src\Final.py:2263
+#: src\Final.py:2332
 msgid "✏️ Edit Preset"
 msgstr "✏️ 編輯"
 
-#: src\Final.py:2271
+#: src\Final.py:2340
 msgid "❌ Delete Preset"
 msgstr "❌ 刪除"
 
-#: src\Final.py:2307
+#: src\Final.py:2376
 msgid "No saved presets for this character"
 msgstr "此角色還沒有設定任何預置配裝"
 
-#: src\Final.py:3882
+#: src\Final.py:3951
 msgid "➕ Add Relic"
 msgstr "➕ 新增遺物"
 
-#: src\Final.py:3888
+#: src\Final.py:3957
 msgid "🔄 Refresh Inventory"
 msgstr "🔄 重新整理物品欄"
 
-#: src\Final.py:3909
+#: src\Final.py:3961
+msgid "📤 Export to Excel"
+msgstr "📤 匯出至 Excel"
+
+#: src\Final.py:3965
+msgid "📥 Import from Excel"
+msgstr "📥 從 Excel 匯入"
+
+#: src\Final.py:3974
 msgid "🗑️ Delete All Illegal"
 msgstr "🗑️ 刪除所有非法遺物"
 
-#: src\Final.py:3915
+#: src\Final.py:3980
 msgid "🔧 Mass Fix"
 msgstr "🔧 批量修正"
 
-#: src\Final.py:3935
+#: src\Final.py:4000
 msgid "Red = Illegal"
 msgstr "紅色 = 非法遺物"
 
-#: src\Final.py:3942
+#: src\Final.py:4007
 msgid "Purple = Missing Curse"
 msgstr "紫色 = 缺少詛咒"
 
-#: src\Final.py:3949
+#: src\Final.py:4014
 msgid "Teal = Strict Invalid"
 msgstr "青綠色 = 嚴格無效"
 
-#: src\Final.py:3958
+#: src\Final.py:4023
 msgid "Orange = Unique Relic (don't edit)"
 msgstr "橙色 = 獨特遺物（請勿編輯）"
 
-#: src\Final.py:3965
+#: src\Final.py:4030
 msgid "Blue = Illegal Unique"
 msgstr "藍色 = 非法獨特遺物"
 
-#: src\Final.py:3974
+#: src\Final.py:4039
 msgid "🔍 Search:"
 msgstr "🔍 搜尋："
 
-#: src\Final.py:3986
+#: src\Final.py:4051
 msgid "in:"
 msgstr "從:"
 
-#: src\Final.py:4011
+#: src\Final.py:4076
 msgid "Clear"
 msgstr "清除"
 
-#: src\Final.py:4018
+#: src\Final.py:4083
 msgid "👤 Char:"
 msgstr "👤 角色："
 
-#: src\Final.py:4036
+#: src\Final.py:4101
 msgid "🎨 Color:"
 msgstr "🎨 顏色："
 
-#: src\Final.py:4054
+#: src\Final.py:4119
 msgid "⚠️ Status:"
 msgstr "⚠️ 狀態："
 
-#: src\Final.py:4180
+#: src\Final.py:4245
 msgid "Modify Selected"
 msgstr "修改選取項目"
 
-#: src\Final.py:4188
+#: src\Final.py:4253
 msgid "Delete Selected"
 msgstr "刪除已選項目"
 
-#: src\Final.py:4198
+#: src\Final.py:4263
 msgid "Select All"
 msgstr "全選"
 
-#: src\Final.py:4203
+#: src\Final.py:4268
 msgid "Deselect All"
 msgstr "取消全選"
 
-#: src\Final.py:4217
+#: src\Final.py:4282
 #, python-brace-format
 msgid "{selected_count} selected"
 msgstr "已選擇{selected_count}個"
 
-#: src\Final.py:4407 src\Final.py:4434
+#: src\Final.py:4472 src\Final.py:4499
 msgid "Confirm"
 msgstr ""
 
-#: src\Final.py:4409
+#: src\Final.py:4474
 msgid "Modifying Murks would get you banned. Are you sure you want to proceed?"
 msgstr ""
 
-#: src\Final.py:4418
+#: src\Final.py:4483
 msgid "Modify Murks"
 msgstr "修改暗痕"
 
-#: src\Final.py:4419 src\Final.py:4444
+#: src\Final.py:4484 src\Final.py:4509
 msgid "Enter new value:"
 msgstr ""
 
-#: src\Final.py:4435
+#: src\Final.py:4500
 msgid "Modifying Sigs would get you banned. Are you sure you want to proceed?"
 msgstr ""
 
-#: src\Final.py:4443
+#: src\Final.py:4508
 msgid "Modify Sigs"
 msgstr "修改為王之證"
 
-#: src\Final.py:4480
+#: src\Final.py:4545
 #, python-brace-format
 msgid "⚠️ {count} Illegal Relic(s) Found"
 msgstr ""
 
-#: src\Final.py:4485
+#: src\Final.py:4550
 msgid "✓ All Relics Valid"
 msgstr ""
 
-#: src\Final.py:5141
+#: src\Final.py:5206
 msgid "Move Index"
 msgstr "移動索引"
 
-#: src\Final.py:5142
+#: src\Final.py:5207
 msgid "Move to After (#):"
 msgstr "移動至此序號之後 (#)："
 
-#: src\Final.py:5144
+#: src\Final.py:5209
 msgid "Note: This will also affect the 'Acquisition Time' sorting in-game."
 msgstr "注意：這也會影響遊戲內的「取得時間」排序。"
 
@@ -313,12 +321,6 @@ msgid ""
 msgstr ""
 "遊戲原生並不支援非ASCII字元輸入。雖然目前為止尚未有封鎖報告，但請謹慎操作並自"
 "行承擔風險。"
-
-#~ msgid "📤 Export to Excel"
-#~ msgstr "📤 匯出至 Excel"
-
-#~ msgid "📥 Import from Excel"
-#~ msgstr "📥 從 Excel 匯入"
 
 #~ msgid "Preset name cannot be empty"
 #~ msgstr "預置配裝不能是空的"
