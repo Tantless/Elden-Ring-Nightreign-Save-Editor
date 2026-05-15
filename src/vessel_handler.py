@@ -375,12 +375,6 @@ class VesselParser:
 
             relics = list(struct.unpack_from("<6I", globals.data, cursor))
             cursor += 24  # Relics
-            for r in relics:
-                if (r & 0xF0000000) == self.ITEM_TYPE_RELIC and r != 0:
-                    if r not in self.relic_ga_hero_map:
-                        self.relic_ga_hero_map[r] = set()
-                    self.relic_ga_hero_map[r].add(h_id)
-                    self.inventory.equip_relic(r, h_id)
 
             timestamp = struct.unpack_from("<Q", globals.data, cursor)[0]  # not sure
             cursor += 8
