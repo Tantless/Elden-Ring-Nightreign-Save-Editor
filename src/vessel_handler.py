@@ -655,6 +655,10 @@ class LoadoutHandler:
     def display_results(self):
         self.parser.display_results()
 
+    def auto_adjust_all_presets_equipment(self):
+        for hero_loadout in self.heroes.values():
+            hero_loadout.auto_adjust_cur_equipment()
+
     def update_hero_loadout(self, hero_index: int):
         self.modifier.update_hero_loadout(self.heroes[hero_index])
 
@@ -720,6 +724,7 @@ class LoadoutHandler:
             raise RuntimeError("Not found a preset with 0 counter")
         if zero_preset_index != len(self.all_presets) - 1:
             self._swap_preset(zero_preset_index, -1)
+        self.auto_adjust_all_presets_equipment()
 
     def _swap_preset(self, preset_index1: int, preset_index2: int):
         """Swap 2 presets and their index, offsets"""
@@ -802,7 +807,6 @@ class LoadoutHandler:
 
         # Add to hero preset
         self.heroes[hero_type].add_preset(**new_preset)
-        self.heroes[hero_type].auto_adjust_cur_equipment()
         self.update_all_loadouts()
 
     def remove_preset(self, preset_index: int):
@@ -823,7 +827,6 @@ class LoadoutHandler:
 
         # Update heroes
         self.heroes[preset["hero_type"]].presets.remove(preset)
-        self.heroes[preset["hero_type"]].auto_adjust_cur_equipment()
         self.update_all_loadouts()
 
     def replace_vessel_relic(self, hero_type: int, vessel_id: int,
