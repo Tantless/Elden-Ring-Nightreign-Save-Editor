@@ -814,8 +814,9 @@ class LoadoutHandler:
         base_offset = preset["offsets"]["base"]
 
         if preset["counter"] == 0:
+            min_counter = min(p["counter"] for p in self.all_presets if p["counter"] != 0)
             for p in self.all_presets:
-                p["counter"] -= 1
+                p["counter"] -= min_counter
         else:
             self.unused_preset_slots.append(base_offset)
         self.all_presets.remove(preset)
