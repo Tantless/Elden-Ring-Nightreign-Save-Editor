@@ -1,0 +1,8 @@
+{
+  "electronRelease": {
+    "channel": "preview",
+    "defaultArtifact": false,
+    "promotedVersion": null,
+    "keepLegacyArtifacts": true
+  }
+}

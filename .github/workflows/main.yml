@@ -129,11 +129,137 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact-path }}
 
+  electron-preview:
+    name: Electron Windows Release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Python Dependencies
+        run: uv sync --python 3.14
+
+      - name: Install Electron Dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Check Electron Version
+        working-directory: frontend
+        run: npm run version:check
+
+      - name: Resolve Electron Release Policy
+        id: electron_policy
+        working-directory: frontend
+        run: node scripts/resolve-release-policy.cjs
+
+      - name: Test Electron Release Policy
+        working-directory: frontend
+        run: npm run release:policy:test
+
+      - name: Test Electron Promotion Policy
+        working-directory: frontend
+        run: npm run release:promote-policy:test
+
+      - name: Test Electron Promotion Handoff
+        working-directory: frontend
+        run: npm run release:promotion-handoff:test
+
+      - name: Test Electron Promotion Verifier
+        working-directory: frontend
+        run: npm run verify:promotion:test
+
+      - name: Test Electron Manual Acceptance Handoff
+        working-directory: frontend
+        run: npm run acceptance:handoff:test
+
+      - name: Test Electron Manual Acceptance Report
+        working-directory: frontend
+        run: npm run acceptance:report:test
+
+      - name: Test Electron Release Readiness
+        working-directory: frontend
+        run: npm run release:readiness:test
+
+      - name: Test Electron Preview Manifest
+        working-directory: frontend
+        run: npm run release:preview-manifest:test
+
+      - name: Test Release Artifact Bundle Check
+        working-directory: frontend
+        run: npm run release:publication-bundle:test
+
+      - name: Test GitHub Release Publication Check
+        working-directory: frontend
+        run: npm run release:github-publication:test
+
+      - name: Test Electron Signing Dry Run
+        working-directory: frontend
+        run: npm run release:signing:test
+
+      - name: Run Electron Renderer Smoke
+        working-directory: frontend
+        run: npm run smoke:renderer
+
+      - name: Build Electron Artifact
+        working-directory: frontend
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WIN_CSC_NAME: ${{ secrets.WIN_CSC_NAME }}
+        run: npm run ${{ steps.electron_policy.outputs.build_script }}
+
+      - name: Generate Electron Preview Manifest
+        if: steps.electron_policy.outputs.channel == 'preview'
+        working-directory: frontend
+        run: npm run release:preview-manifest
+
+      - name: Check Electron Artifacts
+        working-directory: frontend
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          WIN_CSC_NAME: ${{ secrets.WIN_CSC_NAME }}
+        run: npm run ${{ steps.electron_policy.outputs.check_script }}
+
+      - name: Audit Electron Migration
+        working-directory: frontend
+        run: npm run migration:audit
+
+      - name: Dry Run Electron Promotion Audit
+        working-directory: frontend
+        run: npm run migration:audit:promotion-dry-run
+
+      - name: Upload Electron Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.electron_policy.outputs.artifact_name }}
+          path: |
+            frontend/release/*.exe
+            frontend/release/*.zip
+            frontend/release/*.blockmap
+            frontend/release/electron-preview-manifest.json
+
   check:
-    needs: build
+    needs:
+      - build
+      - electron-preview
     runs-on: ubuntu-latest
     outputs:
       exists: ${{ steps.check_tag.outputs.exists }}
+      release_exists: ${{ steps.check_release.outputs.exists }}
+      publication_ok: ${{ steps.check_publication.outputs.ok }}
       newtag: ${{ steps.get_version.outputs.newtag}}
     steps:
       - name: Checkout code
@@ -145,6 +271,11 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.14"
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
 
       - name: Get Version from pyproject.toml
         id: get_version
@@ -161,6 +292,46 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Check if GitHub Release exists
+        id: check_release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.get_version.outputs.newtag }}
+        run: |
+          API_ROOT="${GITHUB_API_URL:-https://api.github.com}"
+          STATUS=$(curl -sS -o release-response.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${API_ROOT}/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG_NAME}")
+          if [ "$STATUS" = "200" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          elif [ "$STATUS" = "404" ]; then
+            echo "exists=false" >> $GITHUB_OUTPUT
+          else
+            cat release-response.json
+            echo "Unexpected GitHub release lookup status: $STATUS" >&2
+            exit 1
+          fi
+
+      - name: Check existing GitHub Release publication
+        id: check_publication
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.get_version.outputs.newtag }}
+        run: |
+          set +e
+          node frontend/scripts/check-github-release-publication.cjs --repo "${GITHUB_REPOSITORY}" --tag "${TAG_NAME}" --verify-hashes --retries 0 --retry-delay-ms 0 > publication-check.json
+          STATUS=$?
+          if [ -f publication-check.json ]; then
+            cat publication-check.json
+          fi
+          if [ "$STATUS" = "0" ]; then
+            echo "ok=true" >> $GITHUB_OUTPUT
+          else
+            echo "ok=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create Git Tag
         if: steps.check_tag.outputs.exists == 'false'
         run: |
@@ -171,9 +342,17 @@ jobs:
 
   release:
     needs: check
-    if: needs.check.outputs.exists == 'false'
+    if: needs.check.outputs.publication_ok != 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
@@ -183,6 +362,9 @@ jobs:
       - name: Display files
         run: ls ./artifacts
 
+      - name: Check release artifact bundle
+        run: node frontend/scripts/check-release-artifact-bundle.cjs ./artifacts
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -191,4 +373,10 @@ jobs:
           generate_release_notes: false
           draft: true
           prerelease: false
+          overwrite_files: true
           files: ./artifacts/*
+
+      - name: Verify GitHub Release Publication
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node frontend/scripts/check-github-release-publication.cjs --repo ${{ github.repository }} --tag ${{ needs.check.outputs.newtag }} --verify-hashes --retries 6 --retry-delay-ms 10000

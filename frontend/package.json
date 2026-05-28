@@ -1,0 +1,102 @@
+{
+  "name": "nightreign-electron-ui",
+  "version": "4.6.6",
+  "private": true,
+  "description": "Electron UI prototype for Elden Ring Nightreign Save Editor",
+  "author": "Tantless",
+  "main": "./out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "tsc --noEmit && electron-vite build",
+    "preview": "electron-vite preview",
+    "smoke:renderer": "npm run build && electron scripts/smoke-renderer.cjs",
+    "smoke:app": "npm run build && node scripts/smoke-app.cjs",
+    "smoke:packaged": "node scripts/smoke-app.cjs --packaged",
+    "smoke:ui": "npm run build && node scripts/smoke-app.cjs --ui",
+    "smoke:ui:dev": "node scripts/smoke-app.cjs --dev --ui",
+    "smoke:ui:packaged": "node scripts/smoke-app.cjs --ui --packaged",
+    "verify:release": "node scripts/verify-release.cjs",
+    "verify:release:full": "node scripts/verify-release.cjs --full",
+    "verify:promotion": "node scripts/verify-promotion.cjs",
+    "verify:promotion:test": "node scripts/test-verify-promotion.cjs",
+    "acceptance:handoff": "node scripts/manual-acceptance-handoff.cjs",
+    "acceptance:handoff:test": "node scripts/test-manual-acceptance-handoff.cjs",
+    "acceptance:report:template": "node scripts/manual-acceptance-report.cjs --template",
+    "acceptance:report:init": "node scripts/manual-acceptance-report.cjs --template --write",
+    "acceptance:report:preflight": "node scripts/manual-acceptance-report.cjs --preflight",
+    "acceptance:report:check": "node scripts/manual-acceptance-report.cjs --check",
+    "acceptance:report:test": "node scripts/test-manual-acceptance-report.cjs",
+    "migration:audit": "node scripts/audit-migration-parity.cjs",
+    "migration:audit:strict": "node scripts/audit-migration-parity.cjs --strict",
+    "migration:audit:promotion-dry-run": "node scripts/audit-migration-parity.cjs --strict --simulate-promotion --simulate-acceptance --simulate-publication",
+    "release:check-preview": "node scripts/check-release-readiness.cjs --preview",
+    "release:check-promotion": "node scripts/check-release-readiness.cjs --promotion",
+    "release:readiness:test": "node scripts/test-release-readiness.cjs",
+    "release:preview-manifest": "node scripts/preview-manifest.cjs --write",
+    "release:preview-manifest:test": "node scripts/test-preview-manifest.cjs",
+    "release:publication-bundle:check": "node scripts/check-release-artifact-bundle.cjs",
+    "release:publication-bundle:test": "node scripts/test-release-artifact-bundle.cjs",
+    "release:github-publication:check": "node scripts/check-github-release-publication.cjs",
+    "release:github-publication:report": "node scripts/check-github-release-publication.cjs --write-report",
+    "release:github-publication:test": "node scripts/test-github-release-publication.cjs",
+    "release:check-signatures": "node scripts/check-signatures.cjs",
+    "release:policy": "node scripts/resolve-release-policy.cjs",
+    "release:promote-policy": "node scripts/promote-release-policy.cjs",
+    "release:promote-policy:write": "node scripts/promote-release-policy.cjs --write",
+    "release:promote-policy:test": "node scripts/test-promote-release-policy.cjs",
+    "release:promotion-handoff": "node scripts/promotion-handoff.cjs",
+    "release:promotion-handoff:test": "node scripts/test-promotion-handoff.cjs",
+    "release:policy:test": "node scripts/test-release-policy.cjs",
+    "release:signing:test": "node scripts/test-sign-python-sidecar.cjs",
+    "version:check": "node scripts/check-version.cjs",
+    "build:python-bridge": "node scripts/build-python-bridge.cjs",
+    "sign:python-sidecar": "node scripts/sign-python-sidecar.cjs",
+    "dist:dir": "npm run version:check && npm run build && npm run build:python-bridge && electron-builder --dir --publish=never --config.win.signAndEditExecutable=false",
+    "dist:win": "npm run version:check && npm run build && npm run build:python-bridge && npm run sign:python-sidecar && electron-builder --win",
+    "dist:win:unsigned": "npm run version:check && npm run build && npm run build:python-bridge && electron-builder --win --publish=never --config.win.signAndEditExecutable=false"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron-vite": "^4.0.0",
+    "lucide-react": "^0.554.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "electron": "^39.2.6",
+    "electron-builder": "^26.8.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.4"
+  },
+  "build": {
+    "appId": "com.nightreign.saveeditor",
+    "productName": "Nightreign Save Editor",
+    "artifactName": "Nightreign-Save-Editor-Electron-${version}-${os}-${arch}.${ext}",
+    "copyright": "Copyright 2026 Tantless",
+    "directories": {
+      "output": "release"
+    },
+    "icon": "build/icon",
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../src/dist/NightreignElectronBridge.exe",
+        "to": "python/NightreignElectronBridge.exe"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "asar": true
+  }
+}

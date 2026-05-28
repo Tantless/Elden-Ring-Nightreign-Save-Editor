@@ -13,7 +13,17 @@ def get_base_dir():
         return Path(__file__).resolve().parent
 
 
-CONFIG_FILE = os.path.join(get_base_dir(), "editor_config.json")
+def get_config_dir():
+    electron_config_dir = os.environ.get("NIGHTREIGN_ELECTRON_CONFIG_DIR")
+    electron_work_dir = os.environ.get("NIGHTREIGN_ELECTRON_WORK_DIR")
+    if electron_config_dir:
+        return Path(electron_config_dir)
+    if electron_work_dir:
+        return Path(electron_work_dir)
+    return get_base_dir()
+
+
+CONFIG_FILE = os.path.join(get_config_dir(), "editor_config.json")
 
 
 class ConfigManager:
@@ -59,6 +69,7 @@ class ConfigManager:
 
     def save(self):
         try:
+            Path(CONFIG_FILE).parent.mkdir(parents=True, exist_ok=True)
             with open(CONFIG_FILE, 'wb') as f:
                 f.write(orjson.dumps(self._config, option=orjson.OPT_INDENT_2))
         except Exception:

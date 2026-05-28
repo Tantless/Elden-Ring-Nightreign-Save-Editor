@@ -1,6 +1,14 @@
 # IDE files
 .vscode/
 
+# Local environment/secrets
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
 # Debug files
 debug*.txt
 editor_config.json
@@ -15,10 +23,26 @@ __pycache__/
 # Build files
 /build/
 /dist/
+node_modules/
+frontend/node_modules/
+frontend/out/
+frontend/dist/
+frontend/dist-electron/
+frontend/release/
+frontend/acceptance-report.json
+frontend/github-publication-report.json
+frontend/manual-acceptance/
+src/build/
+src/dist/
 
 # Decrypted save files
 src/decrypted_output/
 src/decrypted_output_import/
+src/decrypted_output_electron/
+src/decrypted_output_electron_import/
+*.sl2
+*.co2
+*.dat
 
 # Dev/test scripts
 src/analyze_presets.py
@@ -30,3 +54,6 @@ src/logs/*
 
 # Dev/test Generated
 src/backup/
+.codex/
+.agents/
+.trellis/
