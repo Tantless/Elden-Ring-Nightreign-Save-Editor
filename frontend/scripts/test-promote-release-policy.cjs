@@ -79,6 +79,7 @@ function main() {
   try {
     const dryRun = createPromotionReport({
       frontendRoot: dryRunRoot,
+      env: {},
       write: false,
       verifySignatures: failingSignatureVerifier
     })
