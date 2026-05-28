@@ -133,56 +133,182 @@ function sha256Buffer(buffer) {
   return createHash('sha256').update(buffer).digest('hex')
 }
 
+function fetchErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error)
+}
+
 async function fetchJson(fetchImpl, url, headers) {
-  const response = await fetchImpl(url, { headers })
-  if (!response.ok) {
+  try {
+    const response = await fetchImpl(url, { headers })
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        value: null,
+        error: `GET ${url} failed with status ${response.status}`
+      }
+    }
+    return {
+      ok: true,
+      status: response.status,
+      value: await response.json(),
+      error: ''
+    }
+  } catch (error) {
     return {
       ok: false,
-      status: response.status,
+      status: 0,
       value: null,
-      error: `GET ${url} failed with status ${response.status}`
+      error: `GET ${url} failed: ${fetchErrorMessage(error)}`
     }
-  }
-  return {
-    ok: true,
-    status: response.status,
-    value: await response.json(),
-    error: ''
   }
 }
 
 async function fetchText(fetchImpl, url, headers) {
-  const response = await fetchImpl(url, { headers })
-  if (!response.ok) {
+  try {
+    const response = await fetchImpl(url, { headers })
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        value: '',
+        error: `GET ${url} failed with status ${response.status}`
+      }
+    }
+    return {
+      ok: true,
+      status: response.status,
+      value: await response.text(),
+      error: ''
+    }
+  } catch (error) {
     return {
       ok: false,
-      status: response.status,
+      status: 0,
       value: '',
-      error: `GET ${url} failed with status ${response.status}`
+      error: `GET ${url} failed: ${fetchErrorMessage(error)}`
     }
-  }
-  return {
-    ok: true,
-    status: response.status,
-    value: await response.text(),
-    error: ''
   }
 }
 
 async function fetchBuffer(fetchImpl, url, headers) {
-  const response = await fetchImpl(url, { headers })
-  if (!response.ok) {
+  try {
+    const response = await fetchImpl(url, { headers })
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        value: Buffer.alloc(0),
+        error: `GET ${url} failed with status ${response.status}`
+      }
+    }
+    return {
+      ok: true,
+      status: response.status,
+      value: Buffer.from(await response.arrayBuffer()),
+      error: ''
+    }
+  } catch (error) {
     return {
       ok: false,
-      status: response.status,
+      status: 0,
       value: Buffer.alloc(0),
-      error: `GET ${url} failed with status ${response.status}`
+      error: `GET ${url} failed: ${fetchErrorMessage(error)}`
     }
   }
+}
+
+function githubAssetDownloadHeaders(headers) {
+  return {
+    ...headers,
+    Accept: 'application/octet-stream'
+  }
+}
+
+async function fetchAssetText(fetchImpl, asset, headers) {
+  const browserUrl = asset.browser_download_url
+  if (browserUrl) {
+    const browserResult = await fetchText(fetchImpl, browserUrl, headers)
+    if (browserResult.ok || !asset.url) {
+      return browserResult
+    }
+    const apiResult = await fetchText(fetchImpl, asset.url, githubAssetDownloadHeaders(headers))
+    return apiResult.ok
+      ? apiResult
+      : {
+          ok: false,
+          status: apiResult.status,
+          value: '',
+          error: `${browserResult.error}; API asset download failed: ${apiResult.error}`
+        }
+  }
+  return fetchText(fetchImpl, asset.url, githubAssetDownloadHeaders(headers))
+}
+
+async function fetchAssetBuffer(fetchImpl, asset, headers) {
+  const browserUrl = asset.browser_download_url
+  if (browserUrl) {
+    const browserResult = await fetchBuffer(fetchImpl, browserUrl, headers)
+    if (browserResult.ok || !asset.url) {
+      return browserResult
+    }
+    const apiResult = await fetchBuffer(fetchImpl, asset.url, githubAssetDownloadHeaders(headers))
+    return apiResult.ok
+      ? apiResult
+      : {
+          ok: false,
+          status: apiResult.status,
+          value: Buffer.alloc(0),
+          error: `${browserResult.error}; API asset download failed: ${apiResult.error}`
+        }
+  }
+  return fetchBuffer(fetchImpl, asset.url, githubAssetDownloadHeaders(headers))
+}
+
+async function fetchGitHubRelease({ fetchImpl, apiBase, repo, tag, headers }) {
+  const normalizedApiBase = normalizeApiBase(apiBase)
+  const releaseUrl = `${normalizedApiBase}/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`
+  const releaseResult = await fetchJson(fetchImpl, releaseUrl, headers)
+  if (releaseResult.ok || releaseResult.status !== 404) {
+    return {
+      ...releaseResult,
+      source: 'tag-endpoint',
+      attemptedUrls: [releaseUrl]
+    }
+  }
+
+  const listUrl = `${normalizedApiBase}/repos/${repo}/releases?per_page=100`
+  const listResult = await fetchJson(fetchImpl, listUrl, headers)
+  if (!listResult.ok) {
+    return {
+      ok: false,
+      status: listResult.status,
+      value: null,
+      source: 'release-list',
+      attemptedUrls: [releaseUrl, listUrl],
+      error: `${releaseResult.error}; fallback release list failed: ${listResult.error}`
+    }
+  }
+
+  const releases = Array.isArray(listResult.value) ? listResult.value : []
+  const release = releases.find((candidate) => candidate?.tag_name === tag)
+  if (!release) {
+    return {
+      ok: false,
+      status: 404,
+      value: null,
+      source: 'release-list',
+      attemptedUrls: [releaseUrl, listUrl],
+      error: `${releaseResult.error}; fallback release list did not include tag ${tag}`
+    }
+  }
+
   return {
     ok: true,
-    status: response.status,
-    value: Buffer.from(await response.arrayBuffer()),
+    status: listResult.status,
+    value: release,
+    source: 'release-list',
+    attemptedUrls: [releaseUrl, listUrl],
     error: ''
   }
 }
@@ -251,7 +377,7 @@ async function verifyPublishedElectronArtifact({ fetchImpl, headers, assets, art
 
   let actualSha256 = null
   if (verifyHashes) {
-    const download = await fetchBuffer(fetchImpl, asset.browser_download_url, headers)
+    const download = await fetchAssetBuffer(fetchImpl, asset, headers)
     if (!download.ok) {
       failures.push(`${artifact.label} could not be downloaded for hash verification: ${download.error}`)
     } else {
@@ -271,6 +397,7 @@ async function verifyPublishedElectronArtifact({ fetchImpl, headers, assets, art
     actualSize: asset.size,
     expectedSha256: artifact.sha256,
     actualSha256,
+    apiUrl: asset.url,
     browserDownloadUrl: asset.browser_download_url
   }
 }
@@ -299,12 +426,23 @@ async function createGithubPublicationReport({
   }
 
   let release = null
+  let releaseLookup = null
   let manifest = null
   let manifestAsset = null
   const headers = githubHeaders(token)
   if (resolvedRepo && fetchImpl) {
-    const releaseUrl = `${normalizeApiBase(apiBase)}/repos/${resolvedRepo}/releases/tags/${encodeURIComponent(resolvedTag)}`
-    const releaseResult = await fetchJson(fetchImpl, releaseUrl, headers)
+    const releaseResult = await fetchGitHubRelease({
+      fetchImpl,
+      apiBase,
+      repo: resolvedRepo,
+      tag: resolvedTag,
+      headers
+    })
+    releaseLookup = {
+      source: releaseResult.source,
+      status: releaseResult.status,
+      attemptedUrls: releaseResult.attemptedUrls
+    }
     if (!releaseResult.ok) {
       failures.push(`GitHub release was not found or could not be read: ${releaseResult.error}`)
     } else {
@@ -320,7 +458,7 @@ async function createGithubPublicationReport({
   if (release) {
     manifestAsset = findUniqueAsset(assets, MANIFEST_NAME, failures, 'Electron preview manifest')
     if (manifestAsset) {
-      const manifestResult = await fetchText(fetchImpl, manifestAsset.browser_download_url, headers)
+      const manifestResult = await fetchAssetText(fetchImpl, manifestAsset, headers)
       if (!manifestResult.ok) {
         failures.push(`Electron preview manifest could not be downloaded: ${manifestResult.error}`)
       } else {
@@ -379,6 +517,7 @@ async function createGithubPublicationReport({
     repo: resolvedRepo,
     tag: resolvedTag,
     verifyHashes,
+    releaseLookup,
     release: release
       ? {
           id: release.id,
@@ -395,6 +534,7 @@ async function createGithubPublicationReport({
         ? {
             name: manifestAsset.name,
             size: manifestAsset.size,
+            apiUrl: manifestAsset.url,
             browserDownloadUrl: manifestAsset.browser_download_url
           }
         : null,
@@ -628,6 +768,7 @@ module.exports = {
   createGithubPublicationReport,
   createGithubPublicationReportWithRetries,
   defaultGithubPublicationReportPath,
+  fetchGitHubRelease,
   inferGitHubRepository,
   githubToken,
   parseArgs,

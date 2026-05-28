@@ -92,11 +92,18 @@ function asset(name, value) {
     id: name.length,
     name,
     size: Buffer.byteLength(value),
+    url: `${API_BASE}/assets/${encodeURIComponent(name)}`,
     browser_download_url: `${API_BASE}/download/${encodeURIComponent(name)}`
   }
 }
 
-function createFixture({ omitElectron = null, omitLegacy = null, manifestOverrides = {} } = {}) {
+function createFixture({
+  omitElectron = null,
+  omitLegacy = null,
+  manifestOverrides = {},
+  releaseByTagStatus = 200,
+  browserDownloads404 = false
+} = {}) {
   const repoRoot = mkdtempSync(join(tmpdir(), 'nightreign-github-publication-'))
   const frontendRoot = join(repoRoot, 'frontend')
   mkdirSync(join(repoRoot, '.github', 'workflows'), { recursive: true })
@@ -132,11 +139,25 @@ function createFixture({ omitElectron = null, omitLegacy = null, manifestOverrid
 
   const fetchImpl = async (url) => {
     if (url === `${API_BASE}/repos/${REPO}/releases/tags/${encodeURIComponent(TAG)}`) {
-      return jsonResponse(200, release)
+      return jsonResponse(releaseByTagStatus, releaseByTagStatus === 200 ? release : { message: 'not found by tag' })
+    }
+    if (url === `${API_BASE}/repos/${REPO}/releases?per_page=100`) {
+      return jsonResponse(200, [release])
     }
     const downloadPrefix = `${API_BASE}/download/`
     if (url.startsWith(downloadPrefix)) {
+      if (browserDownloads404) {
+        return textResponse(404, 'draft browser download unavailable')
+      }
       const name = decodeURIComponent(url.slice(downloadPrefix.length))
+      if (Object.prototype.hasOwnProperty.call(bodies, name)) {
+        return textResponse(200, bodies[name])
+      }
+      return textResponse(404, 'missing')
+    }
+    const assetPrefix = `${API_BASE}/assets/`
+    if (url.startsWith(assetPrefix)) {
+      const name = decodeURIComponent(url.slice(assetPrefix.length))
       if (Object.prototype.hasOwnProperty.call(bodies, name)) {
         return textResponse(200, bodies[name])
       }
@@ -318,17 +339,41 @@ async function main() {
     rmSync(valid.repoRoot, { recursive: true, force: true })
   }
 
+  const draftFallback = createFixture({ releaseByTagStatus: 404, browserDownloads404: true })
+  try {
+    const report = await createGithubPublicationReport({
+      repoRoot: draftFallback.repoRoot,
+      frontendRoot: draftFallback.frontendRoot,
+      repo: REPO,
+      tag: TAG,
+      apiBase: API_BASE,
+      fetchImpl: draftFallback.fetchImpl,
+      verifyHashes: true,
+      generatedAt: '2026-05-28T00:00:00.000Z'
+    })
+    assert(report.ok === true, 'draft GitHub publication should pass through release-list fallback')
+    assert(report.releaseLookup.source === 'release-list', 'draft fallback should report release-list lookup')
+    assert(report.release?.draft === true, 'draft fallback should return the draft release')
+    cases.push({ name: 'draft release list fallback', ok: true })
+  } finally {
+    rmSync(draftFallback.repoRoot, { recursive: true, force: true })
+  }
+
   const retryFixture = createFixture()
   try {
     let releaseAttempts = 0
     let sleptMs = 0
     const releaseUrl = `${API_BASE}/repos/${REPO}/releases/tags/${encodeURIComponent(TAG)}`
+    const releaseListUrl = `${API_BASE}/repos/${REPO}/releases?per_page=100`
     const retryFetch = async (url) => {
       if (url === releaseUrl) {
         releaseAttempts += 1
         if (releaseAttempts === 1) {
           return jsonResponse(404, { message: 'not yet visible' })
         }
+      }
+      if (url === releaseListUrl && releaseAttempts === 1) {
+        return jsonResponse(200, [])
       }
       return retryFixture.fetchImpl(url)
     }
@@ -354,6 +399,45 @@ async function main() {
     cases.push({ name: 'transient publication miss retries', ok: true })
   } finally {
     rmSync(retryFixture.repoRoot, { recursive: true, force: true })
+  }
+
+  const fetchThrowFixture = createFixture()
+  try {
+    let releaseAttempts = 0
+    let sleptMs = 0
+    const releaseUrl = `${API_BASE}/repos/${REPO}/releases/tags/${encodeURIComponent(TAG)}`
+    const retryFetch = async (url) => {
+      if (url === releaseUrl) {
+        releaseAttempts += 1
+        if (releaseAttempts === 1) {
+          throw new Error('fetch failed')
+        }
+      }
+      return fetchThrowFixture.fetchImpl(url)
+    }
+    const report = await createGithubPublicationReportWithRetries({
+      repoRoot: fetchThrowFixture.repoRoot,
+      frontendRoot: fetchThrowFixture.frontendRoot,
+      repo: REPO,
+      tag: TAG,
+      apiBase: API_BASE,
+      fetchImpl: retryFetch,
+      retries: 1,
+      retryDelayMs: 25,
+      sleepImpl: async (ms) => {
+        sleptMs += ms
+      }
+    })
+    assert(report.ok === true, 'publication retry should pass after transient fetch failure')
+    assert(releaseAttempts === 2, 'publication retry should fetch release after a thrown fetch failure')
+    assert(sleptMs === 25, 'publication retry should wait after a thrown fetch failure')
+    assert(
+      report.retry.attemptsDetail[0].failures.some((failure) => failure.includes('fetch failed')),
+      'publication retry should record the thrown fetch failure'
+    )
+    cases.push({ name: 'transient fetch failure retries', ok: true })
+  } finally {
+    rmSync(fetchThrowFixture.repoRoot, { recursive: true, force: true })
   }
 
   const missingElectron = createFixture({ omitElectron: ELECTRON_ZIP })
