@@ -159,11 +159,7 @@ jobs:
         working-directory: frontend
         run: |
           Remove-Item Env:\ELECTRON_SKIP_BINARY_DOWNLOAD -ErrorAction SilentlyContinue
-          $env:npm_config_ignore_scripts = "false"
-          $env:force_no_cache = "true"
-          npm rebuild electron --foreground-scripts
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node -e "require('electron')"
+          npm run electron:ensure
 
       - name: Check Electron Version
         working-directory: frontend

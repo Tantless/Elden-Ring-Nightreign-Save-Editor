@@ -10,6 +10,7 @@
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
+    "electron:ensure": "node scripts/ensure-electron-binary.cjs",
     "smoke:renderer": "npm run build && electron scripts/smoke-renderer.cjs",
     "smoke:app": "npm run build && node scripts/smoke-app.cjs",
     "smoke:packaged": "node scripts/smoke-app.cjs --packaged",

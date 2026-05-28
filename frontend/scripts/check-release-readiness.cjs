@@ -201,6 +201,12 @@ function createReadinessReport({
     ),
     checkContains(
       workflowText,
+      'npm run electron:ensure',
+      'Electron binary install verification in CI',
+      failures
+    ),
+    checkContains(
+      workflowText,
       'npm run smoke:renderer',
       'Electron renderer smoke in CI',
       failures

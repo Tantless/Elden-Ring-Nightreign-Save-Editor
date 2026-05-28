@@ -78,6 +78,8 @@ function createFixture(policy) {
       '      run: npm run release:github-publication:test',
       '    - name: Test signing dry run',
       '      run: npm run release:signing:test',
+      '    - name: Verify Electron binary',
+      '      run: npm run electron:ensure',
       '    - name: Renderer smoke',
       '      run: npm run smoke:renderer',
       '    - name: Build',
