@@ -33,18 +33,34 @@ function installedElectronPath() {
   return join(distPath, platformExecutable)
 }
 
-function hasUsableElectronBinary() {
+function hasMatchingElectronDist() {
   try {
     const installedVersion = readFileSync(join(distPath, 'version'), 'utf8').replace(/^v/, '').trim()
+    return installedVersion === electronVersion && existsSync(installedElectronPath())
+  } catch {
+    return false
+  }
+}
+
+function hasUsableElectronBinary() {
+  try {
     const installedExecutable = readFileSync(pathFile, 'utf8').trim()
     return (
-      installedVersion === electronVersion &&
+      hasMatchingElectronDist() &&
       installedExecutable === platformExecutable &&
       existsSync(installedElectronPath())
     )
   } catch {
     return false
   }
+}
+
+function repairElectronPathFile() {
+  if (!hasMatchingElectronDist()) {
+    return false
+  }
+  writeFileSync(pathFile, platformExecutable, 'utf8')
+  return true
 }
 
 async function installElectronBinary() {
@@ -74,7 +90,9 @@ async function installElectronBinary() {
 
 async function main() {
   if (!hasUsableElectronBinary()) {
-    await installElectronBinary()
+    if (!repairElectronPathFile()) {
+      await installElectronBinary()
+    }
   }
 
   const electronPath = require('electron')
@@ -91,7 +109,12 @@ async function main() {
   }, null, 2))
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack || error.message : String(error))
-  process.exit(1)
-})
+const keepAlive = setInterval(() => {}, 1000)
+main()
+  .catch((error) => {
+    console.error(error instanceof Error ? error.stack || error.message : String(error))
+    process.exitCode = 1
+  })
+  .finally(() => {
+    clearInterval(keepAlive)
+  })
