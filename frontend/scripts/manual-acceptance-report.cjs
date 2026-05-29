@@ -492,6 +492,7 @@ function commandSetForAcceptanceStatus(frontendRoot, reportPath, nextCheck, revi
   const nextId = nextCheck?.id || '<check-id>'
   return {
     preflight: npmCommand('acceptance:report:preflight', reportArgs),
+    launch: npmCommand('acceptance:launch', reportArgs),
     markNextPass: npmCommand('acceptance:report:mark', [
       ...reportArgs,
       '--mark-pass',

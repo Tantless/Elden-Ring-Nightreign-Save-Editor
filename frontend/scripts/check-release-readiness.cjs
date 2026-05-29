@@ -171,6 +171,12 @@ function createReadinessReport({
     ),
     checkContains(
       workflowText,
+      'npm run acceptance:launch:test',
+      'Electron manual acceptance launch tests',
+      failures
+    ),
+    checkContains(
+      workflowText,
       'npm run release:readiness:test',
       'Electron release readiness tests',
       failures

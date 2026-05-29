@@ -194,6 +194,10 @@ jobs:
         working-directory: frontend
         run: npm run acceptance:report:test
 
+      - name: Test Electron Manual Acceptance Launch
+        working-directory: frontend
+        run: npm run acceptance:launch:test
+
       - name: Test Electron Release Readiness
         working-directory: frontend
         run: npm run release:readiness:test

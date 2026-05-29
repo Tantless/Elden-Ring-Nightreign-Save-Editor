@@ -294,6 +294,7 @@ function main() {
         statusState.commands.markNextPass.includes(`--mark-pass ${manualAcceptanceChecks()[0].id}`),
         'status should include next pass command'
       )
+      assert(statusState.commands.launch.includes('acceptance:launch'), 'status should include launch command')
       const missingStatus = createAcceptanceReportStatus({
         frontendRoot,
         version: VERSION,

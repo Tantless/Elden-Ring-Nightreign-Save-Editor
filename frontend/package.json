@@ -23,6 +23,8 @@
     "verify:promotion:test": "node scripts/test-verify-promotion.cjs",
     "acceptance:handoff": "node scripts/manual-acceptance-handoff.cjs",
     "acceptance:handoff:test": "node scripts/test-manual-acceptance-handoff.cjs",
+    "acceptance:launch": "node scripts/manual-acceptance-launch.cjs",
+    "acceptance:launch:test": "node scripts/test-manual-acceptance-launch.cjs",
     "acceptance:report:template": "node scripts/manual-acceptance-report.cjs --template",
     "acceptance:report:init": "node scripts/manual-acceptance-report.cjs --template --write",
     "acceptance:report:status": "node scripts/manual-acceptance-report.cjs --status",

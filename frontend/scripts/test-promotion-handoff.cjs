@@ -191,6 +191,8 @@ function createFixture(policy, options = {}) {
       '      run: npm run acceptance:handoff:test',
       '    - name: Test manual acceptance report',
       '      run: npm run acceptance:report:test',
+      '    - name: Test manual acceptance launch',
+      '      run: npm run acceptance:launch:test',
       '    - name: Test readiness',
       '      run: npm run release:readiness:test',
       '    - name: Test preview manifest',

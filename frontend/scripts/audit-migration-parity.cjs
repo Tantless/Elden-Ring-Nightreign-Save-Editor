@@ -138,6 +138,8 @@ function main() {
   const verifyPromotionTestText = readText(join(frontendRoot, 'scripts', 'test-verify-promotion.cjs'))
   const manualAcceptanceHandoffText = readText(join(frontendRoot, 'scripts', 'manual-acceptance-handoff.cjs'))
   const manualAcceptanceHandoffTestText = readText(join(frontendRoot, 'scripts', 'test-manual-acceptance-handoff.cjs'))
+  const manualAcceptanceLaunchText = readText(join(frontendRoot, 'scripts', 'manual-acceptance-launch.cjs'))
+  const manualAcceptanceLaunchTestText = readText(join(frontendRoot, 'scripts', 'test-manual-acceptance-launch.cjs'))
   const manualAcceptanceReportText = readText(join(frontendRoot, 'scripts', 'manual-acceptance-report.cjs'))
   const manualAcceptanceReportTestText = readText(join(frontendRoot, 'scripts', 'test-manual-acceptance-report.cjs'))
   const previewManifestText = readText(join(frontendRoot, 'scripts', 'preview-manifest.cjs'))
@@ -171,6 +173,8 @@ function main() {
     verifyPromotionTest: hasScript(packageJson, 'verify:promotion:test'),
     acceptanceHandoff: hasScript(packageJson, 'acceptance:handoff'),
     acceptanceHandoffTest: hasScript(packageJson, 'acceptance:handoff:test'),
+    acceptanceLaunch: hasScript(packageJson, 'acceptance:launch'),
+    acceptanceLaunchTest: hasScript(packageJson, 'acceptance:launch:test'),
     acceptanceReportTemplate: hasScript(packageJson, 'acceptance:report:template'),
     acceptanceReportInit: hasScript(packageJson, 'acceptance:report:init'),
     acceptanceReportStatus: hasScript(packageJson, 'acceptance:report:status'),
@@ -224,6 +228,7 @@ function main() {
     workflowText.includes('npm run verify:promotion:test') &&
     workflowText.includes('npm run acceptance:handoff:test') &&
     workflowText.includes('npm run acceptance:report:test') &&
+    workflowText.includes('npm run acceptance:launch:test') &&
     workflowText.includes('npm run release:readiness:test') &&
     workflowText.includes('npm run release:preview-manifest:test') &&
     workflowText.includes('npm run release:publication-bundle:test') &&
@@ -298,6 +303,11 @@ function main() {
       manualAcceptanceHandoffText.includes('source save size and lastWriteTime') &&
       manualAcceptanceHandoffTestText.includes('acceptance handoff with copied real save') &&
       manualAcceptanceHandoffTestText.includes('missing copied real save blocks handoff') &&
+      manualAcceptanceLaunchText.includes('NIGHTREIGN_ELECTRON_WORK_DIR') &&
+      manualAcceptanceLaunchText.includes('NIGHTREIGN_ELECTRON_SMOKE_USER_DATA') &&
+      manualAcceptanceLaunchText.includes('NIGHTREIGN_ELECTRON_SMOKE_OPEN_SAVE') &&
+      manualAcceptanceLaunchTestText.includes('launch plan dry run') &&
+      manualAcceptanceLaunchTestText.includes('missing packaged app fails') &&
       manualAcceptanceReportText.includes('readAcceptanceReportState') &&
       manualAcceptanceReportText.includes('validateAcceptancePreflight') &&
       manualAcceptanceReportText.includes('acceptance report requires accepted=true') &&
