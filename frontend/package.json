@@ -25,6 +25,7 @@
     "acceptance:handoff:test": "node scripts/test-manual-acceptance-handoff.cjs",
     "acceptance:report:template": "node scripts/manual-acceptance-report.cjs --template",
     "acceptance:report:init": "node scripts/manual-acceptance-report.cjs --template --write",
+    "acceptance:report:mark": "node scripts/manual-acceptance-report.cjs --mark",
     "acceptance:report:preflight": "node scripts/manual-acceptance-report.cjs --preflight",
     "acceptance:report:check": "node scripts/manual-acceptance-report.cjs --check",
     "acceptance:report:test": "node scripts/test-manual-acceptance-report.cjs",

@@ -1,8 +1,18 @@
-const { copyFileSync, mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } = require('node:fs')
+const {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync
+} = require('node:fs')
 const { join } = require('node:path')
 const { tmpdir } = require('node:os')
 const { manualAcceptanceChecks } = require('./manual-acceptance-handoff.cjs')
 const {
+  applyAcceptanceReportMarks,
   createAcceptanceReportTemplate,
   parseArgs,
   readAcceptancePreflightState,
@@ -96,6 +106,19 @@ function main() {
     assert(parsedReport.reportPath === 'acceptance.json', '--report should capture path')
     const parsedPreflight = parseArgs(['--preflight'])
     assert(parsedPreflight.mode === 'preflight', '--preflight should select preflight mode')
+    const parsedMark = parseArgs([
+      '--mark',
+      '--mark-pass',
+      'save-open-restore-character',
+      '--reviewer',
+      'tantless',
+      '--check-notes',
+      'manual pass'
+    ])
+    assert(parsedMark.mode === 'mark', '--mark should select mark mode')
+    assert(parsedMark.markPassIds[0] === 'save-open-restore-character', '--mark-pass should capture check id')
+    assert(parsedMark.reviewer === 'tantless', '--reviewer should capture reviewer')
+    assert(parsedMark.checkNotes === 'manual pass', '--check-notes should capture notes')
     const parsedInit = parseArgs([
       '--template',
       '--write',
@@ -284,6 +307,120 @@ function main() {
       }
       writeAcceptanceReportTemplate(initPath, initReport, { force: true })
       cases.push({ name: 'template write keeps acceptance incomplete', ok: true })
+
+      const markPath = join(frontendRoot, 'mark-report.json')
+      const markReport = createAcceptanceReportTemplate(VERSION, { exists: true, ...source })
+      markReport.copiedSavePath = copied.path
+      markReport.automation = {
+        acceptanceHandoff: true,
+        verifyRelease: true,
+        releaseCheckPreview: true,
+        migrationAudit: true,
+        promotionDryRun: true
+      }
+      writeJson(markPath, markReport)
+      const markedOne = applyAcceptanceReportMarks({
+        frontendRoot,
+        version: VERSION,
+        reportPath: markPath,
+        markPassIds: ['save-open-restore-character'],
+        reviewer: 'tantless',
+        checkNotes: 'manual pass'
+      })
+      assert(markedOne.ok === true, 'single mark should write successfully')
+      assert(markedOne.completed === false, 'single mark should not complete acceptance')
+      assert(markedOne.validation.readyForHumanAcceptance === true, 'single mark should keep preflight ready')
+      assert(
+        markedOne.validation.passedChecks.includes('save-open-restore-character'),
+        'single mark should pass selected check'
+      )
+      const oneReport = JSON.parse(readFileSync(markPath, 'utf8'))
+      assert(oneReport.accepted === false, 'single mark should keep accepted false')
+      assert(oneReport.completedAt === '', 'single mark should keep completedAt empty')
+      assert(
+        oneReport.checks.find((item) => item.id === 'save-open-restore-character').notes === 'manual pass',
+        'single mark should store check notes'
+      )
+
+      try {
+        applyAcceptanceReportMarks({
+          frontendRoot,
+          version: VERSION,
+          reportPath: markPath,
+          complete: true
+        })
+        throw new Error('complete should fail when checks are pending')
+      } catch (error) {
+        assert(
+          String(error.message).includes('requires every manual check to pass'),
+          'complete should reject pending checks'
+        )
+      }
+
+      const completePath = join(frontendRoot, 'complete-report.json')
+      const completeReport = createAcceptanceReportTemplate(VERSION, { exists: true, ...source })
+      completeReport.copiedSavePath = copied.path
+      completeReport.automation = {
+        acceptanceHandoff: true,
+        verifyRelease: true,
+        releaseCheckPreview: true,
+        migrationAudit: true,
+        promotionDryRun: true
+      }
+      writeJson(completePath, completeReport)
+      try {
+        applyAcceptanceReportMarks({
+          frontendRoot,
+          version: VERSION,
+          reportPath: completePath,
+          markPassIds: ['all'],
+          complete: true
+        })
+        throw new Error('complete without reviewer should fail')
+      } catch (error) {
+        assert(String(error.message).includes('requires --reviewer'), 'complete should require reviewer')
+      }
+      const completed = applyAcceptanceReportMarks({
+        frontendRoot,
+        version: VERSION,
+        reportPath: completePath,
+        markPassIds: ['all'],
+        reviewer: 'tantless',
+        notes: 'manual acceptance finished',
+        complete: true,
+        now: new Date('2026-05-29T02:00:00.000Z')
+      })
+      assert(completed.completed === true, 'complete should mark report accepted')
+      assert(completed.validation.ok === true, 'completed report should pass final validation')
+      assert(completed.validation.passedChecks.length === manualAcceptanceChecks().length, 'complete should pass all checks')
+      const completedMarkedReport = JSON.parse(readFileSync(completePath, 'utf8'))
+      assert(completedMarkedReport.accepted === true, 'completed report should set accepted')
+      assert(completedMarkedReport.completedAt === '2026-05-29T02:00:00.000Z', 'completed report should set timestamp')
+      assert(completedMarkedReport.sourceSave.after.lastWriteTime === source.lastWriteTime, 'complete should record live source state')
+      assert(completedMarkedReport.notes === 'manual acceptance finished', 'complete should store report notes')
+
+      try {
+        applyAcceptanceReportMarks({
+          frontendRoot,
+          version: VERSION,
+          reportPath: completePath,
+          markPassIds: ['missing-check']
+        })
+        throw new Error('unknown check should fail')
+      } catch (error) {
+        assert(String(error.message).includes('unknown manual acceptance check'), 'unknown check should be rejected')
+      }
+      const reopened = applyAcceptanceReportMarks({
+        frontendRoot,
+        version: VERSION,
+        reportPath: completePath,
+        markFailIds: ['settings-preferences']
+      })
+      assert(reopened.completed === false, 'marking a failure should reopen accepted report')
+      const reopenedReport = JSON.parse(readFileSync(completePath, 'utf8'))
+      assert(reopenedReport.accepted === false, 'reopened report should clear accepted')
+      assert(reopenedReport.completedAt === '', 'reopened report should clear completedAt')
+      cases.push({ name: 'report marking workflow', ok: true })
     } finally {
       rmSync(repoRoot, { recursive: true, force: true })
     }

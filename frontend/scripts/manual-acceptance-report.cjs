@@ -18,6 +18,13 @@ function parseArgs(argv) {
   let sourceSavePath = null
   let write = false
   let force = false
+  let complete = false
+  let reviewer = null
+  let notes = null
+  let checkNotes = null
+  const markPassIds = []
+  const markFailIds = []
+  const clearCheckIds = []
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     if (arg === '--template') {
@@ -30,6 +37,75 @@ function parseArgs(argv) {
     }
     if (arg === '--preflight') {
       mode = 'preflight'
+      continue
+    }
+    if (arg === '--mark') {
+      mode = 'mark'
+      continue
+    }
+    if (arg === '--mark-pass') {
+      const next = argv[i + 1]
+      if (!next) {
+        throw new Error('--mark-pass requires a check id or "all"')
+      }
+      mode = 'mark'
+      markPassIds.push(next)
+      i += 1
+      continue
+    }
+    if (arg === '--mark-fail') {
+      const next = argv[i + 1]
+      if (!next) {
+        throw new Error('--mark-fail requires a check id')
+      }
+      mode = 'mark'
+      markFailIds.push(next)
+      i += 1
+      continue
+    }
+    if (arg === '--clear-check') {
+      const next = argv[i + 1]
+      if (!next) {
+        throw new Error('--clear-check requires a check id or "all"')
+      }
+      mode = 'mark'
+      clearCheckIds.push(next)
+      i += 1
+      continue
+    }
+    if (arg === '--reviewer') {
+      const next = argv[i + 1]
+      if (!next) {
+        throw new Error('--reviewer requires a name')
+      }
+      mode = 'mark'
+      reviewer = next
+      i += 1
+      continue
+    }
+    if (arg === '--complete') {
+      mode = 'mark'
+      complete = true
+      continue
+    }
+    if (arg === '--notes') {
+      const next = argv[i + 1]
+      if (next === undefined) {
+        throw new Error('--notes requires text')
+      }
+      mode = 'mark'
+      notes = next
+      i += 1
+      continue
+    }
+    if (arg === '--check-notes') {
+      const next = argv[i + 1]
+      if (next === undefined) {
+        throw new Error('--check-notes requires text')
+      }
+      mode = 'mark'
+      checkNotes = next
+      i += 1
       continue
     }
     if (arg === '--report') {
@@ -60,7 +136,20 @@ function parseArgs(argv) {
     }
     throw new Error(`Unexpected argument: ${arg}`)
   }
-  return { mode, reportPath, sourceSavePath, write, force }
+  return {
+    mode,
+    reportPath,
+    sourceSavePath,
+    write,
+    force,
+    complete,
+    reviewer,
+    notes,
+    checkNotes,
+    markPassIds,
+    markFailIds,
+    clearCheckIds
+  }
 }
 
 function defaultReportPath(frontendRoot) {
@@ -146,6 +235,14 @@ function writeAcceptanceReportTemplate(reportPath, report, { force = false } = {
   mkdirSync(dirname(absolutePath), { recursive: true })
   writeFileSync(absolutePath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
   return absolutePath
+}
+
+function reportSaveFileState(state) {
+  return {
+    path: state.path,
+    size: state.size,
+    lastWriteTime: state.lastWriteTime
+  }
 }
 
 function sameResolvedPath(left, right) {
@@ -356,6 +453,136 @@ function validateAcceptanceReport(report, version, expectedChecks = manualAccept
   }
 }
 
+function expandCheckIds(ids, expectedIds, label) {
+  const expanded = []
+  for (const id of ids) {
+    if (id === 'all') {
+      expanded.push(...expectedIds)
+      continue
+    }
+    if (!expectedIds.includes(id)) {
+      throw new Error(`${label} unknown manual acceptance check: ${id}`)
+    }
+    expanded.push(id)
+  }
+  return [...new Set(expanded)]
+}
+
+function applyAcceptanceReportMarks({
+  frontendRoot,
+  version = readPackageVersion(frontendRoot),
+  reportPath = defaultReportPath(frontendRoot),
+  markPassIds = [],
+  markFailIds = [],
+  clearCheckIds = [],
+  reviewer = null,
+  notes = null,
+  checkNotes = null,
+  complete = false,
+  now = new Date()
+}) {
+  const absolutePath = resolve(reportPath)
+  if (!existsSync(absolutePath)) {
+    throw new Error(`Missing manual acceptance report: ${absolutePath}`)
+  }
+
+  const report = readJson(absolutePath)
+  if (!report || typeof report !== 'object' || Array.isArray(report)) {
+    throw new Error('acceptance report must be a JSON object.')
+  }
+  if (!Array.isArray(report.checks)) {
+    throw new Error('acceptance report requires a checks array.')
+  }
+
+  const expectedIds = manualAcceptanceChecks().map((item) => item.id)
+  const checkMap = new Map(report.checks.map((item) => [item.id, item]))
+  for (const id of expectedIds) {
+    if (!checkMap.has(id)) {
+      throw new Error(`acceptance report is missing manual acceptance check: ${id}`)
+    }
+  }
+
+  const passIds = expandCheckIds(markPassIds, expectedIds, '--mark-pass')
+  const failIds = expandCheckIds(markFailIds, expectedIds, '--mark-fail')
+  const clearIds = expandCheckIds(clearCheckIds, expectedIds, '--clear-check')
+  const changedIds = new Set([...passIds, ...failIds, ...clearIds])
+  if (
+    changedIds.size === 0 &&
+    reviewer === null &&
+    notes === null &&
+    checkNotes === null &&
+    complete === false
+  ) {
+    throw new Error(
+      'No acceptance report updates requested. Use --mark-pass, --mark-fail, --clear-check, --reviewer, --notes, or --complete.'
+    )
+  }
+
+  for (const id of clearIds) {
+    checkMap.get(id).status = 'pending'
+  }
+  for (const id of failIds) {
+    checkMap.get(id).status = 'fail'
+  }
+  for (const id of passIds) {
+    checkMap.get(id).status = 'pass'
+  }
+  if (checkNotes !== null) {
+    for (const id of changedIds) {
+      checkMap.get(id).notes = checkNotes
+    }
+  }
+  if (reviewer !== null) {
+    const trimmedReviewer = reviewer.trim()
+    if (!trimmedReviewer) {
+      throw new Error('--reviewer requires a non-empty name')
+    }
+    report.reviewer = trimmedReviewer
+  }
+  if (notes !== null) {
+    report.notes = notes
+  }
+
+  if (!complete) {
+    report.accepted = false
+    report.completedAt = ''
+  } else {
+    if (typeof report.reviewer !== 'string' || report.reviewer.trim() === '') {
+      throw new Error('--complete requires --reviewer or an existing non-empty reviewer in the report.')
+    }
+    const incompleteIds = expectedIds.filter((id) => checkMap.get(id)?.status !== 'pass')
+    if (incompleteIds.length > 0) {
+      throw new Error(`--complete requires every manual check to pass. Pending/failing: ${incompleteIds.join(', ')}`)
+    }
+    const beforePath = report.sourceSave?.before?.path
+    const liveSource = sourceSaveFileState(beforePath)
+    if (!liveSource.exists) {
+      throw new Error(`--complete requires live source save verification: ${liveSource.path}`)
+    }
+    report.sourceSave.after = reportSaveFileState(liveSource)
+    report.accepted = true
+    report.completedAt = now.toISOString()
+
+    const completedValidation = validateAcceptanceReport(report, version)
+    if (!completedValidation.ok) {
+      throw new Error(`Completed acceptance report would not pass validation: ${completedValidation.errors.join('; ')}`)
+    }
+  }
+
+  writeFileSync(absolutePath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
+  const validation = report.accepted
+    ? readAcceptanceReportState({ frontendRoot, version, reportPath: absolutePath })
+    : readAcceptancePreflightState({ frontendRoot, version, reportPath: absolutePath })
+
+  return {
+    ok: true,
+    path: absolutePath,
+    updatedChecks: [...changedIds],
+    completed: report.accepted === true,
+    validation
+  }
+}
+
 function readAcceptanceReportState({
   frontendRoot,
   version = readPackageVersion(frontendRoot),
@@ -461,7 +688,20 @@ function readAcceptancePreflightState({
 }
 
 function main() {
-  const { mode, reportPath, sourceSavePath, write, force } = parseArgs(process.argv.slice(2))
+  const {
+    mode,
+    reportPath,
+    sourceSavePath,
+    write,
+    force,
+    complete,
+    reviewer,
+    notes,
+    checkNotes,
+    markPassIds,
+    markFailIds,
+    clearCheckIds
+  } = parseArgs(process.argv.slice(2))
   const frontendRoot = resolve(__dirname, '..')
   const version = readPackageVersion(frontendRoot)
   const resolvedReportPath = reportPath ? resolve(reportPath) : defaultReportPath(frontendRoot)
@@ -478,6 +718,23 @@ function main() {
       return
     }
     console.log(JSON.stringify(report, null, 2))
+    return
+  }
+
+  if (mode === 'mark') {
+    const state = applyAcceptanceReportMarks({
+      frontendRoot,
+      version,
+      reportPath: resolvedReportPath,
+      markPassIds,
+      markFailIds,
+      clearCheckIds,
+      reviewer,
+      notes,
+      checkNotes,
+      complete
+    })
+    console.log(JSON.stringify(state, null, 2))
     return
   }
 
@@ -515,6 +772,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  applyAcceptanceReportMarks,
   createAcceptanceReportTemplate,
   defaultReportPath,
   parseArgs,
