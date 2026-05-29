@@ -1,6 +1,7 @@
-const { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } = require('node:fs')
+const { createHash } = require('node:crypto')
+const { existsSync, mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } = require('node:fs')
 const { dirname, join } = require('node:path')
-const { downloadArtifact } = require('@electron/get')
+const { tmpdir } = require('node:os')
 const extract = require('extract-zip')
 
 const electronPackagePath = require.resolve('electron/package.json')
@@ -12,6 +13,8 @@ const arch = process.env.npm_config_arch || process.arch
 const platformExecutable = electronPlatformExecutable(platform)
 const distPath = join(electronRoot, 'dist')
 const pathFile = join(electronRoot, 'path.txt')
+const downloadTimeoutMs = Number.parseInt(process.env.ELECTRON_DOWNLOAD_TIMEOUT_MS || '180000', 10)
+const watchdogMs = downloadTimeoutMs + 60000
 
 function electronPlatformExecutable(targetPlatform) {
   switch (targetPlatform) {
@@ -64,19 +67,26 @@ function repairElectronPathFile() {
 }
 
 async function installElectronBinary() {
-  const zipPath = await downloadArtifact({
-    version: electronVersion,
-    artifactName: 'electron',
-    force: true,
-    cacheRoot: process.env.electron_config_cache,
-    checksums: require(join(electronRoot, 'checksums.json')),
-    platform,
-    arch
-  })
+  const zipName = `electron-v${electronVersion}-${platform}-${arch}.zip`
+  const checksums = require(join(electronRoot, 'checksums.json'))
+  const expectedSha256 = checksums[zipName]
+  if (!expectedSha256) {
+    throw new Error(`Electron checksum was not found for ${zipName}`)
+  }
+
+  const zipUrl = `https://github.com/electron/electron/releases/download/v${electronVersion}/${zipName}`
+  const zipPath = join(tmpdir(), zipName)
+  console.log(`Downloading ${zipUrl}`)
+  await downloadFile(zipUrl, zipPath, downloadTimeoutMs)
+  const actualSha256 = sha256File(zipPath)
+  if (actualSha256 !== expectedSha256) {
+    throw new Error(`Electron download checksum mismatch for ${zipName}: expected ${expectedSha256}, got ${actualSha256}`)
+  }
 
   rmSync(distPath, { recursive: true, force: true })
   mkdirSync(distPath, { recursive: true })
   await extract(zipPath, { dir: distPath })
+  unlinkSync(zipPath)
 
   const extractedTypes = join(distPath, 'electron.d.ts')
   if (existsSync(extractedTypes)) {
@@ -86,6 +96,24 @@ async function installElectronBinary() {
   }
 
   writeFileSync(pathFile, platformExecutable, 'utf8')
+}
+
+async function downloadFile(url, destination, timeoutMs) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, { signal: controller.signal })
+    if (!response.ok) {
+      throw new Error(`GET ${url} failed with status ${response.status}`)
+    }
+    writeFileSync(destination, Buffer.from(await response.arrayBuffer()))
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function sha256File(path) {
+  return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
 
 async function main() {
@@ -109,12 +137,16 @@ async function main() {
   }, null, 2))
 }
 
-const keepAlive = setInterval(() => {}, 1000)
+const watchdog = setTimeout(() => {
+  console.error(`Electron binary verification timed out after ${watchdogMs}ms`)
+  process.exit(1)
+}, watchdogMs)
+
 main()
   .catch((error) => {
     console.error(error instanceof Error ? error.stack || error.message : String(error))
     process.exitCode = 1
   })
   .finally(() => {
-    clearInterval(keepAlive)
+    clearTimeout(watchdog)
   })
