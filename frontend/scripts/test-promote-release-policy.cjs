@@ -94,6 +94,9 @@ function main() {
       ),
       'dry-run should keep a placeholder repo when no GitHub repository can be inferred'
     )
+    assert(dryRun.nextRequiredCommands.includes('npm run acceptance:launch:test'), 'dry-run should test acceptance launcher')
+    assert(dryRun.nextRequiredCommands.includes('npm run acceptance:report:status'), 'dry-run should include acceptance status')
+    assert(dryRun.nextRequiredCommands.includes('npm run acceptance:launch'), 'dry-run should include acceptance launch')
     cases.push({ name: 'dry-run keeps policy', ok: true })
   } finally {
     rmSync(dryRunRoot, { recursive: true, force: true })

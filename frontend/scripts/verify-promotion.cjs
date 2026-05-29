@@ -96,6 +96,7 @@ function createPromotionVerificationPlan({
     step('Electron release policy tests', 'release:policy:test'),
     step('Electron promotion policy tests', 'release:promote-policy:test'),
     step('Electron promotion handoff tests', 'release:promotion-handoff:test'),
+    step('Electron manual acceptance launch tests', 'acceptance:launch:test'),
     step('Electron readiness tests', 'release:readiness:test'),
     step('Electron signing dry-run tests', 'release:signing:test')
   ]

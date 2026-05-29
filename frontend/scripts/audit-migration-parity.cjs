@@ -278,13 +278,15 @@ function main() {
   )
 
   const releaseHardening = status(
-    rendererHtmlText.includes('Content-Security-Policy') &&
+      rendererHtmlText.includes('Content-Security-Policy') &&
       rendererHtmlText.includes("script-src 'self'") &&
       !rendererHtmlText.includes('unsafe-eval') &&
       verifyReleaseText.includes('shell: false') &&
+      verifyReleaseText.includes('acceptance:launch:test') &&
       !verifyReleaseText.includes('shell: process.platform') &&
       verifyPromotionText.includes('shell: false') &&
       verifyPromotionText.includes('createPromotionVerificationPlan') &&
+      verifyPromotionText.includes('acceptance:launch:test') &&
       verifyPromotionText.includes('release:check-signatures') &&
       verifyPromotionText.includes('release:promote-policy:write') &&
       verifyPromotionText.includes('release:github-publication:report') &&
@@ -364,6 +366,8 @@ function main() {
       promoteReleasePolicyText.includes('publicationReportCommand') &&
       promoteReleasePolicyText.includes('Policy was not updated') &&
       promoteReleasePolicyText.includes('release:github-publication:report') &&
+      promoteReleasePolicyText.includes('acceptance:report:status') &&
+      promoteReleasePolicyText.includes('acceptance:launch') &&
       promoteReleasePolicyText.includes('--verify-publication-hashes') &&
       promoteReleasePolicyText.includes('--publication-retries') &&
       promoteReleasePolicyTestText.includes('write blocked by signatures') &&
@@ -373,6 +377,8 @@ function main() {
       promotionHandoffText.includes('publicationReportCommand') &&
       promotionHandoffText.includes('readGithubPublicationReportState') &&
       promotionHandoffText.includes('publicationReport') &&
+      promotionHandoffText.includes('acceptanceStatus') &&
+      promotionHandoffText.includes('acceptance:launch') &&
       promotionHandoffText.includes('readyForPolicyWrite') &&
       promotionHandoffTestText.includes('signed preview ready for policy write') &&
       promotionHandoffTestText.includes('signed default waits for publication report') &&

@@ -81,6 +81,7 @@ function main() {
   run('Electron promotion verifier tests', npmCommand, ['run', 'verify:promotion:test'])
   run('Electron manual acceptance handoff tests', npmCommand, ['run', 'acceptance:handoff:test'])
   run('Electron manual acceptance report tests', npmCommand, ['run', 'acceptance:report:test'])
+  run('Electron manual acceptance launch tests', npmCommand, ['run', 'acceptance:launch:test'])
   run('Electron readiness tests', npmCommand, ['run', 'release:readiness:test'])
   run('Electron preview manifest tests', npmCommand, ['run', 'release:preview-manifest:test'])
   run('Release artifact bundle tests', npmCommand, ['run', 'release:publication-bundle:test'])

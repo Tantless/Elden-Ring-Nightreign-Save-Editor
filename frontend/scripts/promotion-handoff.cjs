@@ -2,7 +2,7 @@ const { resolve } = require('node:path')
 const { verifyPromotionSignatures } = require('./authenticode.cjs')
 const { createReadinessReport } = require('./check-release-readiness.cjs')
 const { inferGitHubRepository, readGithubPublicationReportState } = require('./check-github-release-publication.cjs')
-const { readAcceptanceReportState } = require('./manual-acceptance-report.cjs')
+const { createAcceptanceReportStatus, readAcceptanceReportState } = require('./manual-acceptance-report.cjs')
 const { createPromotionReport, finalPromotionCommand, publicationReportCommand } = require('./promote-release-policy.cjs')
 const { readPackageVersion } = require('./release-policy.cjs')
 
@@ -33,6 +33,7 @@ function createPromotionHandoffReport({
   const signatureChecks = verifySignatures(frontendRoot, artifactBase, signatureFailures)
   const signaturesOk = signatureChecks.length > 0 && signatureChecks.every((item) => item.ok)
   const acceptanceReport = readAcceptanceReportState({ frontendRoot, version })
+  const acceptanceStatus = createAcceptanceReportStatus({ frontendRoot, version })
   const publicationReport = readGithubPublicationReportState({ frontendRoot, repoRoot, version })
   const promotionPlan = createPromotionReport({
     frontendRoot,
@@ -68,9 +69,15 @@ function createPromotionHandoffReport({
     )
   }
   if (!acceptanceReport.ok) {
-    remaining.push(
-      'Complete copied-real-save manual acceptance, then create frontend/acceptance-report.json and run npm run acceptance:report:check.'
-    )
+    if (acceptanceStatus.readyForHumanAcceptance) {
+      remaining.push(
+        `Run ${acceptanceStatus.commands.launch} for the next copied-real-save manual check, record the result with ${acceptanceStatus.commands.markNextPass} or ${acceptanceStatus.commands.markNextFail}, then finish with ${acceptanceStatus.commands.finalCheck}.`
+      )
+    } else {
+      remaining.push(
+        'Prepare copied-real-save manual acceptance with npm run acceptance:handoff -- <real_save_file>, npm run acceptance:report:init -- --source-save <real_save_file>, npm run acceptance:report:status, then npm run acceptance:launch.'
+      )
+    }
   }
 
   return {
@@ -95,6 +102,7 @@ function createPromotionHandoffReport({
     signatureFailures,
     publicationReport,
     acceptanceReport,
+    acceptanceStatus,
     finalPromotionCommand: finalPromotionCommand({ repo: githubRepo, version }),
     remaining,
     nextRequiredCommands: promotionPlan.nextRequiredCommands
