@@ -18,7 +18,8 @@ const pathFile = join(electronRoot, 'path.txt')
 const downloadTimeoutMs = Number.parseInt(process.env.ELECTRON_DOWNLOAD_TIMEOUT_MS || '120000', 10)
 const downloadAttempts = Number.parseInt(process.env.ELECTRON_DOWNLOAD_ATTEMPTS || '3', 10)
 const downloadStallTimeoutMs = Number.parseInt(process.env.ELECTRON_DOWNLOAD_STALL_TIMEOUT_MS || '30000', 10)
-const watchdogMs = downloadTimeoutMs * downloadAttempts + 60000
+const extractTimeoutMs = Number.parseInt(process.env.ELECTRON_EXTRACT_TIMEOUT_MS || '120000', 10)
+const watchdogMs = downloadTimeoutMs * downloadAttempts + extractTimeoutMs + 60000
 let curlAvailability = null
 
 function electronPlatformExecutable(targetPlatform) {
@@ -82,6 +83,7 @@ async function installElectronBinary() {
   const zipUrls = electronDownloadUrls(zipName)
   const zipPath = join(tmpdir(), zipName)
   await downloadFileWithRetries(zipUrls, zipPath, downloadTimeoutMs, downloadAttempts)
+  console.log(`Verifying Electron download checksum for ${zipName}`)
   const actualSha256 = sha256File(zipPath)
   if (actualSha256 !== expectedSha256) {
     throw new Error(`Electron download checksum mismatch for ${zipName}: expected ${expectedSha256}, got ${actualSha256}`)
@@ -89,7 +91,9 @@ async function installElectronBinary() {
 
   rmSync(distPath, { recursive: true, force: true })
   mkdirSync(distPath, { recursive: true })
-  await extract(zipPath, { dir: distPath })
+  console.log(`Extracting ${zipName} to ${distPath}`)
+  await extractElectronZip(zipPath, distPath)
+  console.log(`Extracted ${zipName}`)
   unlinkSync(zipPath)
 
   const extractedTypes = join(distPath, 'electron.d.ts')
@@ -100,6 +104,31 @@ async function installElectronBinary() {
   }
 
   writeFileSync(pathFile, platformExecutable, 'utf8')
+}
+
+async function extractElectronZip(zipPath, destination) {
+  if (process.platform === 'win32') {
+    extractElectronZipWithTar(zipPath, destination)
+    return
+  }
+  await extract(zipPath, { dir: destination })
+}
+
+function extractElectronZipWithTar(zipPath, destination) {
+  console.log(`Extracting Electron zip with tar.exe (timeout ${Math.ceil(extractTimeoutMs / 1000)}s)`)
+  const result = spawnSync('tar.exe', ['-xf', zipPath, '-C', destination], {
+    stdio: 'inherit',
+    timeout: extractTimeoutMs
+  })
+  if (result.error) {
+    throw result.error
+  }
+  if (result.signal) {
+    throw new Error(`tar.exe was terminated by signal ${result.signal}`)
+  }
+  if (result.status !== 0) {
+    throw new Error(`tar.exe exited with status ${result.status}`)
+  }
 }
 
 function electronDownloadUrls(zipName) {
