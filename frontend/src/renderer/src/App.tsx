@@ -41,6 +41,7 @@ import {
   X
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import packageJson from '../../../package.json'
 
 type View = 'files' | 'relics' | 'vessels' | 'settings'
 
@@ -417,6 +418,7 @@ const navItems: Array<{ id: View; label: string; icon: typeof Folder }> = [
   { id: 'vessels', label: '圣杯', icon: Trophy },
   { id: 'settings', label: '设置', icon: Settings }
 ]
+const appVersion = packageJson.version
 
 const relicRows: RelicRow[] = [
   {
@@ -1771,7 +1773,7 @@ function Sidebar({
       </div>
 
       <footer className="sidebar-footer">
-        <span>v1.0.0</span>
+        <span>v{appVersion}</span>
         <CircleHelp size={20} />
       </footer>
     </aside>
