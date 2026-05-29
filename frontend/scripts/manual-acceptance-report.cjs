@@ -39,6 +39,10 @@ function parseArgs(argv) {
       mode = 'preflight'
       continue
     }
+    if (arg === '--status') {
+      mode = 'status'
+      continue
+    }
     if (arg === '--mark') {
       mode = 'mark'
       continue
@@ -468,6 +472,179 @@ function expandCheckIds(ids, expectedIds, label) {
   return [...new Set(expanded)]
 }
 
+function quoteCommandArg(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`
+}
+
+function extraReportArgs(frontendRoot, reportPath) {
+  const defaultPath = resolve(defaultReportPath(frontendRoot))
+  const absolutePath = resolve(reportPath)
+  return sameResolvedPath(defaultPath, absolutePath) ? [] : ['--report', quoteCommandArg(absolutePath)]
+}
+
+function npmCommand(script, args = []) {
+  return args.length > 0 ? `npm run ${script} -- ${args.join(' ')}` : `npm run ${script}`
+}
+
+function commandSetForAcceptanceStatus(frontendRoot, reportPath, nextCheck, reviewer) {
+  const reportArgs = extraReportArgs(frontendRoot, reportPath)
+  const reviewerArg = reviewer && reviewer.trim() ? quoteCommandArg(reviewer.trim()) : '<reviewer>'
+  const nextId = nextCheck?.id || '<check-id>'
+  return {
+    preflight: npmCommand('acceptance:report:preflight', reportArgs),
+    markNextPass: npmCommand('acceptance:report:mark', [
+      ...reportArgs,
+      '--mark-pass',
+      nextId,
+      '--reviewer',
+      reviewerArg,
+      '--check-notes',
+      quoteCommandArg('passed on copied save')
+    ]),
+    markNextFail: npmCommand('acceptance:report:mark', [
+      ...reportArgs,
+      '--mark-fail',
+      nextId,
+      '--reviewer',
+      reviewerArg,
+      '--check-notes',
+      quoteCommandArg('failed on copied save')
+    ]),
+    complete: npmCommand('acceptance:report:mark', [
+      ...reportArgs,
+      '--mark-pass',
+      'all',
+      '--reviewer',
+      reviewerArg,
+      '--complete',
+      '--notes',
+      quoteCommandArg('copied-save acceptance passed')
+    ]),
+    finalCheck: npmCommand('acceptance:report:check', reportArgs)
+  }
+}
+
+function createAcceptanceReportStatus({
+  frontendRoot,
+  version = readPackageVersion(frontendRoot),
+  reportPath = defaultReportPath(frontendRoot)
+}) {
+  const absolutePath = resolve(reportPath)
+  const expectedChecks = manualAcceptanceChecks()
+  const expectedIds = expectedChecks.map((item) => item.id)
+  if (!existsSync(absolutePath)) {
+    return {
+      ok: false,
+      exists: false,
+      path: absolutePath,
+      state: 'missing-report',
+      completionReady: false,
+      readyForHumanAcceptance: false,
+      errors: [`Missing manual acceptance report: ${absolutePath}`],
+      expectedChecks: expectedIds,
+      passedChecks: [],
+      pendingChecks: expectedChecks.map((item) => ({ ...item, status: 'pending', notes: '' })),
+      failedChecks: [],
+      nextCheck: expectedChecks[0] ? { ...expectedChecks[0], status: 'pending', notes: '' } : null,
+      commands: {
+        init: npmCommand('acceptance:report:init', [
+          '--source-save',
+          '<real-save-path>',
+          ...extraReportArgs(frontendRoot, absolutePath)
+        ])
+      },
+      nextRequiredActions: [
+        'Create the ignored local acceptance report from the real source save before manual testing.'
+      ]
+    }
+  }
+
+  try {
+    const report = readJson(absolutePath)
+    const checkMap = new Map(Array.isArray(report.checks) ? report.checks.map((item) => [item.id, item]) : [])
+    const checks = expectedChecks.map((item) => {
+      const recorded = checkMap.get(item.id) || {}
+      const status = recorded.status === 'pass' || recorded.status === 'fail' ? recorded.status : 'pending'
+      return {
+        ...item,
+        status,
+        notes: typeof recorded.notes === 'string' ? recorded.notes : ''
+      }
+    })
+    const passedChecks = checks.filter((item) => item.status === 'pass')
+    const failedChecks = checks.filter((item) => item.status === 'fail')
+    const pendingChecks = checks.filter((item) => item.status !== 'pass')
+    const reportState = readAcceptanceReportState({ frontendRoot, version, reportPath: absolutePath })
+    const preflightState = readAcceptancePreflightState({ frontendRoot, version, reportPath: absolutePath })
+    const nextCheck = pendingChecks[0] || null
+    const commands = commandSetForAcceptanceStatus(frontendRoot, absolutePath, nextCheck, report.reviewer)
+    const completionReady = reportState.ok
+    const readyForHumanAcceptance = !completionReady && preflightState.ok
+    const nextRequiredActions = []
+
+    if (completionReady) {
+      nextRequiredActions.push('No remaining manual acceptance actions. Run the final promotion gate on the signing host.')
+    } else if (readyForHumanAcceptance && nextCheck) {
+      nextRequiredActions.push(`Manually run and verify copied-save check "${nextCheck.id}".`)
+      nextRequiredActions.push(`Record the result with ${commands.markNextPass} or ${commands.markNextFail}.`)
+    } else if (readyForHumanAcceptance) {
+      nextRequiredActions.push(`All manual checks are marked pass; complete the report with ${commands.complete}.`)
+      nextRequiredActions.push(`Then run ${commands.finalCheck}.`)
+    } else {
+      nextRequiredActions.push(`Fix the acceptance report errors, then run ${commands.preflight}.`)
+    }
+
+    return {
+      ok: completionReady || readyForHumanAcceptance,
+      exists: true,
+      path: absolutePath,
+      state: completionReady ? 'accepted' : readyForHumanAcceptance ? 'ready-for-human-acceptance' : 'needs-attention',
+      completionReady,
+      readyForHumanAcceptance,
+      errors: completionReady ? [] : readyForHumanAcceptance ? preflightState.errors : reportState.errors,
+      expectedChecks: expectedIds,
+      passedChecks,
+      pendingChecks,
+      failedChecks,
+      nextCheck,
+      summary: {
+        version: report.version,
+        accepted: report.accepted === true,
+        reviewer: typeof report.reviewer === 'string' ? report.reviewer : '',
+        completedAt: typeof report.completedAt === 'string' ? report.completedAt : '',
+        copiedSavePath: typeof report.copiedSavePath === 'string' ? report.copiedSavePath : '',
+        sourceSaveBefore: report.sourceSave?.before || null,
+        sourceSaveAfter: report.sourceSave?.after || null,
+        liveSourceSave: reportState.summary?.liveSourceSave || preflightState.summary?.liveSourceSave || null,
+        copiedSave: reportState.summary?.copiedSave || preflightState.summary?.copiedSave || null
+      },
+      commands,
+      nextRequiredActions
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      exists: true,
+      path: absolutePath,
+      state: 'invalid-report',
+      completionReady: false,
+      readyForHumanAcceptance: false,
+      errors: [error instanceof Error ? error.message : String(error)],
+      expectedChecks: expectedIds,
+      passedChecks: [],
+      pendingChecks: expectedChecks.map((item) => ({ ...item, status: 'pending', notes: '' })),
+      failedChecks: [],
+      nextCheck: expectedChecks[0] ? { ...expectedChecks[0], status: 'pending', notes: '' } : null,
+      commands: {
+        preflight: npmCommand('acceptance:report:preflight', extraReportArgs(frontendRoot, absolutePath))
+      },
+      nextRequiredActions: [
+        'Fix the invalid JSON or regenerate the acceptance report before manual testing.'
+      ]
+    }
+  }
+}
+
 function applyAcceptanceReportMarks({
   frontendRoot,
   version = readPackageVersion(frontendRoot),
@@ -738,6 +915,16 @@ function main() {
     return
   }
 
+  if (mode === 'status') {
+    const state = createAcceptanceReportStatus({
+      frontendRoot,
+      version,
+      reportPath: resolvedReportPath
+    })
+    console.log(JSON.stringify(state, null, 2))
+    return
+  }
+
   if (mode === 'preflight') {
     const state = readAcceptancePreflightState({
       frontendRoot,
@@ -774,6 +961,7 @@ if (require.main === module) {
 module.exports = {
   applyAcceptanceReportMarks,
   createAcceptanceReportTemplate,
+  createAcceptanceReportStatus,
   defaultReportPath,
   parseArgs,
   readAcceptancePreflightState,

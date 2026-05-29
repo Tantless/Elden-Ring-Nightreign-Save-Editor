@@ -14,6 +14,7 @@ const { manualAcceptanceChecks } = require('./manual-acceptance-handoff.cjs')
 const {
   applyAcceptanceReportMarks,
   createAcceptanceReportTemplate,
+  createAcceptanceReportStatus,
   parseArgs,
   readAcceptancePreflightState,
   readAcceptanceReportState,
@@ -106,6 +107,8 @@ function main() {
     assert(parsedReport.reportPath === 'acceptance.json', '--report should capture path')
     const parsedPreflight = parseArgs(['--preflight'])
     assert(parsedPreflight.mode === 'preflight', '--preflight should select preflight mode')
+    const parsedStatus = parseArgs(['--status'])
+    assert(parsedStatus.mode === 'status', '--status should select status mode')
     const parsedMark = parseArgs([
       '--mark',
       '--mark-pass',
@@ -282,6 +285,22 @@ function main() {
       const preflightState = readAcceptancePreflightState({ frontendRoot, version: VERSION, reportPath })
       assert(preflightState.ok === true, 'custom preflight report should pass readiness')
       assert(preflightState.readyForHumanAcceptance === true, 'preflight state should identify human acceptance readiness')
+      const statusState = createAcceptanceReportStatus({ frontendRoot, version: VERSION, reportPath })
+      assert(statusState.ok === true, 'status should pass for preflight-ready report')
+      assert(statusState.state === 'ready-for-human-acceptance', 'status should identify human acceptance state')
+      assert(statusState.pendingChecks.length === manualAcceptanceChecks().length, 'status should expose pending checks')
+      assert(statusState.nextCheck.id === manualAcceptanceChecks()[0].id, 'status should expose next manual check')
+      assert(
+        statusState.commands.markNextPass.includes(`--mark-pass ${manualAcceptanceChecks()[0].id}`),
+        'status should include next pass command'
+      )
+      const missingStatus = createAcceptanceReportStatus({
+        frontendRoot,
+        version: VERSION,
+        reportPath: join(frontendRoot, 'missing-status.json')
+      })
+      assert(missingStatus.exists === false, 'status should report missing acceptance report')
+      assert(missingStatus.commands.init.includes('acceptance:report:init'), 'missing status should include init command')
       cases.push({ name: 'report file state', ok: true })
 
       const initPath = join(frontendRoot, 'acceptance-report.json')
@@ -398,6 +417,10 @@ function main() {
       assert(completedMarkedReport.completedAt === '2026-05-29T02:00:00.000Z', 'completed report should set timestamp')
       assert(completedMarkedReport.sourceSave.after.lastWriteTime === source.lastWriteTime, 'complete should record live source state')
       assert(completedMarkedReport.notes === 'manual acceptance finished', 'complete should store report notes')
+      const completedStatus = createAcceptanceReportStatus({ frontendRoot, version: VERSION, reportPath: completePath })
+      assert(completedStatus.completionReady === true, 'status should identify completed report')
+      assert(completedStatus.state === 'accepted', 'status should mark accepted report')
+      assert(completedStatus.pendingChecks.length === 0, 'completed status should have no pending checks')
 
       try {
         applyAcceptanceReportMarks({
@@ -421,6 +444,7 @@ function main() {
       assert(reopenedReport.accepted === false, 'reopened report should clear accepted')
       assert(reopenedReport.completedAt === '', 'reopened report should clear completedAt')
       cases.push({ name: 'report marking workflow', ok: true })
+      cases.push({ name: 'report status guidance', ok: true })
     } finally {
       rmSync(repoRoot, { recursive: true, force: true })
     }

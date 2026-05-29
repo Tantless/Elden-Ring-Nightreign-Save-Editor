@@ -173,6 +173,7 @@ function main() {
     acceptanceHandoffTest: hasScript(packageJson, 'acceptance:handoff:test'),
     acceptanceReportTemplate: hasScript(packageJson, 'acceptance:report:template'),
     acceptanceReportInit: hasScript(packageJson, 'acceptance:report:init'),
+    acceptanceReportStatus: hasScript(packageJson, 'acceptance:report:status'),
     acceptanceReportMark: hasScript(packageJson, 'acceptance:report:mark'),
     acceptanceReportPreflight: hasScript(packageJson, 'acceptance:report:preflight'),
     acceptanceReportCheck: hasScript(packageJson, 'acceptance:report:check'),
@@ -305,6 +306,7 @@ function main() {
       manualAcceptanceReportText.includes('sourceSave.after.lastWriteTime must match sourceSave.before.lastWriteTime') &&
       manualAcceptanceReportText.includes('current source save lastWriteTime must match sourceSave.after.lastWriteTime') &&
       manualAcceptanceReportText.includes('writeAcceptanceReportTemplate') &&
+      manualAcceptanceReportText.includes('createAcceptanceReportStatus') &&
       manualAcceptanceReportText.includes('applyAcceptanceReportMarks') &&
       manualAcceptanceReportText.includes('--complete requires every manual check to pass') &&
       manualAcceptanceReportTestText.includes('acceptance preflight validation') &&
@@ -313,6 +315,7 @@ function main() {
       manualAcceptanceReportTestText.includes('live source metadata mutation fails') &&
       manualAcceptanceReportTestText.includes('template write keeps acceptance incomplete') &&
       manualAcceptanceReportTestText.includes('report marking workflow') &&
+      manualAcceptanceReportTestText.includes('report status guidance') &&
       manualAcceptanceReportTestText.includes('failed manual check fails') &&
       previewManifestText.includes('sha256') &&
       previewManifestText.includes('electron-preview-manifest.json') &&
