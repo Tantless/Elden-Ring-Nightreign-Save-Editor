@@ -1,3 +1,4 @@
+const { spawnSync } = require('node:child_process')
 const { createHash } = require('node:crypto')
 const { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } = require('node:fs')
 const https = require('node:https')
@@ -16,7 +17,9 @@ const distPath = join(electronRoot, 'dist')
 const pathFile = join(electronRoot, 'path.txt')
 const downloadTimeoutMs = Number.parseInt(process.env.ELECTRON_DOWNLOAD_TIMEOUT_MS || '120000', 10)
 const downloadAttempts = Number.parseInt(process.env.ELECTRON_DOWNLOAD_ATTEMPTS || '3', 10)
+const downloadStallTimeoutMs = Number.parseInt(process.env.ELECTRON_DOWNLOAD_STALL_TIMEOUT_MS || '30000', 10)
 const watchdogMs = downloadTimeoutMs * downloadAttempts + 60000
+let curlAvailability = null
 
 function electronPlatformExecutable(targetPlatform) {
   switch (targetPlatform) {
@@ -76,10 +79,9 @@ async function installElectronBinary() {
     throw new Error(`Electron checksum was not found for ${zipName}`)
   }
 
-  const zipUrl = `https://github.com/electron/electron/releases/download/v${electronVersion}/${zipName}`
+  const zipUrls = electronDownloadUrls(zipName)
   const zipPath = join(tmpdir(), zipName)
-  console.log(`Downloading ${zipUrl}`)
-  await downloadFileWithRetries(zipUrl, zipPath, downloadTimeoutMs, downloadAttempts)
+  await downloadFileWithRetries(zipUrls, zipPath, downloadTimeoutMs, downloadAttempts)
   const actualSha256 = sha256File(zipPath)
   if (actualSha256 !== expectedSha256) {
     throw new Error(`Electron download checksum mismatch for ${zipName}: expected ${expectedSha256}, got ${actualSha256}`)
@@ -100,24 +102,113 @@ async function installElectronBinary() {
   writeFileSync(pathFile, platformExecutable, 'utf8')
 }
 
-async function downloadFileWithRetries(url, destination, timeoutMs, attempts) {
+function electronDownloadUrls(zipName) {
+  const customUrls = process.env.ELECTRON_DOWNLOAD_URLS
+  if (customUrls) {
+    return uniqueUrls(customUrls.split(/[|,]/).map((url) => url.trim()).filter(Boolean))
+  }
+
+  const configuredMirror = process.env.ELECTRON_MIRROR || process.env.npm_config_electron_mirror
+  const urls = []
+  if (configuredMirror) {
+    urls.push(electronMirrorUrl(configuredMirror, zipName))
+  }
+  urls.push(`https://github.com/electron/electron/releases/download/v${electronVersion}/${zipName}`)
+  urls.push(`https://npmmirror.com/mirrors/electron/${electronVersion}/${zipName}`)
+  urls.push(`https://registry.npmmirror.com/-/binary/electron/${electronVersion}/${zipName}`)
+  return uniqueUrls(urls)
+}
+
+function electronMirrorUrl(mirror, zipName) {
+  const normalizedMirror = mirror.endsWith('/') ? mirror : `${mirror}/`
+  return new URL(`${electronVersion}/${zipName}`, normalizedMirror).toString()
+}
+
+function uniqueUrls(urls) {
+  return [...new Set(urls)]
+}
+
+async function downloadFileWithRetries(urls, destination, timeoutMs, attempts) {
   let lastError = null
+  const useCurl = canUseCurlDownloader()
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    rmSync(destination, { force: true })
-    try {
-      await downloadFileWithRedirects(url, destination, timeoutMs, 0)
-      return
-    } catch (error) {
-      lastError = error
+    for (const url of urls) {
       rmSync(destination, { force: true })
-      const message = error instanceof Error ? error.message : String(error)
-      console.error(`Electron download attempt ${attempt}/${attempts} failed: ${message}`)
-      if (attempt < attempts) {
-        await sleep(1000 * attempt)
+      try {
+        console.log(`Downloading ${url}`)
+        if (useCurl) {
+          downloadFileWithCurl(url, destination, timeoutMs)
+        } else {
+          await downloadFileWithRedirects(url, destination, timeoutMs, 0)
+        }
+        return
+      } catch (error) {
+        lastError = error
+        rmSync(destination, { force: true })
+        const message = error instanceof Error ? error.message : String(error)
+        console.error(`Electron download attempt ${attempt}/${attempts} from ${url} failed: ${message}`)
       }
+    }
+    if (attempt < attempts) {
+      await sleep(1000 * attempt)
     }
   }
   throw lastError || new Error(`Electron download failed after ${attempts} attempts`)
+}
+
+function canUseCurlDownloader() {
+  if (process.env.ELECTRON_DOWNLOAD_DISABLE_CURL === '1') {
+    return false
+  }
+  if (process.platform !== 'win32' || platform !== 'win32') {
+    return false
+  }
+  if (curlAvailability !== null) {
+    return curlAvailability
+  }
+
+  const result = spawnSync('curl.exe', ['--version'], { encoding: 'utf8' })
+  curlAvailability = !result.error && result.status === 0
+  if (!curlAvailability) {
+    console.error('curl.exe was not available; using the Node HTTPS downloader for Electron')
+  }
+  return curlAvailability
+}
+
+function downloadFileWithCurl(url, destination, timeoutMs) {
+  const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000))
+  const stalledTransferSeconds = Math.max(1, Math.min(Math.ceil(downloadStallTimeoutMs / 1000), timeoutSeconds))
+  const args = [
+    '--fail',
+    '--location',
+    '--http1.1',
+    '--connect-timeout',
+    '30',
+    '--max-time',
+    String(timeoutSeconds),
+    '--speed-time',
+    String(stalledTransferSeconds),
+    '--speed-limit',
+    '1024',
+    '--output',
+    destination,
+    url
+  ]
+
+  console.log(`Downloading Electron binary with curl.exe (timeout ${timeoutSeconds}s, stall ${stalledTransferSeconds}s)`)
+  const result = spawnSync('curl.exe', args, {
+    stdio: 'inherit',
+    timeout: timeoutMs + 10000
+  })
+  if (result.error) {
+    throw result.error
+  }
+  if (result.signal) {
+    throw new Error(`curl.exe was terminated by signal ${result.signal}`)
+  }
+  if (result.status !== 0) {
+    throw new Error(`curl.exe exited with status ${result.status}`)
+  }
 }
 
 function downloadFileWithRedirects(url, destination, timeoutMs, redirectCount) {
@@ -145,10 +236,37 @@ function downloadFileWithRedirects(url, destination, timeoutMs, redirectCount) {
       const totalBytes = Number.parseInt(response.headers['content-length'] || '0', 10)
       let downloadedBytes = 0
       let lastProgressAt = Date.now()
+      let settled = false
+      let stallTimer = null
       const file = createWriteStream(destination)
+      const clearStallTimer = () => {
+        if (stallTimer) {
+          clearTimeout(stallTimer)
+          stallTimer = null
+        }
+      }
+      const rejectOnce = (error) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearStallTimer()
+        file.destroy()
+        response.destroy(error)
+        rejectDownload(error)
+      }
+      const resetStallTimer = () => {
+        clearStallTimer()
+        stallTimer = setTimeout(() => {
+          rejectOnce(new Error(`GET ${url} stalled for ${downloadStallTimeoutMs}ms after ${downloadedBytes} bytes`))
+        }, downloadStallTimeoutMs)
+      }
+
+      resetStallTimer()
 
       response.on('data', (chunk) => {
         downloadedBytes += chunk.length
+        resetStallTimer()
         const now = Date.now()
         if (now - lastProgressAt >= 10000) {
           lastProgressAt = now
@@ -161,10 +279,15 @@ function downloadFileWithRedirects(url, destination, timeoutMs, redirectCount) {
 
       response.pipe(file)
       file.on('finish', () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearStallTimer()
         file.close(() => resolveDownload())
       })
-      file.on('error', rejectDownload)
-      response.on('error', rejectDownload)
+      file.on('error', rejectOnce)
+      response.on('error', rejectOnce)
     })
 
     request.setTimeout(timeoutMs, () => {
